@@ -346,6 +346,30 @@ export const useSettings = create<SettingsState>()(
   )
 );
 
+/* ──────────────────────────────────────────────────────────────
+   Favorites (local user list)
+   ────────────────────────────────────────────────────────────── */
+
+interface FavoritesState {
+  ids: string[];
+  toggle: (id: string) => void;
+}
+
+export const useFavorites = create<FavoritesState>()(
+  persist(
+    (set) => ({
+      ids: [],
+      toggle: (id) =>
+        set((s) => ({
+          ids: s.ids.includes(id)
+            ? s.ids.filter((x) => x !== id)
+            : [...s.ids, id],
+        })),
+    }),
+    { name: "tpp-favorites", skipHydration: true }
+  )
+);
+
 /* Rehydrate all persisted stores on the client (hydration-safe). */
 export function rehydrateStores() {
   useCart.persist.rehydrate();
@@ -353,4 +377,6 @@ export function rehydrateStores() {
   useOrders.persist.rehydrate();
   useMenu.persist.rehydrate();
   useSettings.persist.rehydrate();
+  useFavorites.persist.rehydrate();
 }
+
