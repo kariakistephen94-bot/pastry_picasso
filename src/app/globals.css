@@ -1,0 +1,185 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Typography ─────────────────────────────────────────── */
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-manrope), var(--font-inter), -apple-system,
+    BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+
+  /* ── Brand pink (sampled from The Pastry Picasso logo) ──── */
+  --color-brand-50: #fef1f8;
+  --color-brand-100: #fde4f1;
+  --color-brand-200: #fbc9e3;
+  --color-brand-300: #f8a3ce;
+  --color-brand-400: #f26baf;
+  --color-brand-500: #e63f94;
+  --color-brand-600: #d6187c;
+  --color-brand-700: #b80f66;
+  --color-brand-800: #981153;
+  --color-brand-900: #7e1347;
+  --color-brand-950: #4c0526;
+
+  /* ── Warm neutrals ──────────────────────────────────────── */
+  --color-cream-50: #fdfbf8;
+  --color-cream-100: #faf6f1;
+  --color-cream-200: #f3ece4;
+  --color-cream-300: #e9dfd4;
+
+  --color-ink-950: #1d151a;
+  --color-ink-900: #241a20;
+  --color-ink-700: #4c3f47;
+  --color-ink-500: #7d6e76;
+  --color-ink-400: #a2939b;
+  --color-ink-300: #c4b8be;
+
+  /* ── Elevation ──────────────────────────────────────────── */
+  --shadow-soft: 0 1px 2px rgb(36 26 32 / 0.04), 0 8px 24px rgb(36 26 32 / 0.06);
+  --shadow-card: 0 1px 2px rgb(36 26 32 / 0.05), 0 12px 32px rgb(36 26 32 / 0.08);
+  --shadow-float: 0 2px 6px rgb(36 26 32 / 0.06), 0 20px 48px rgb(36 26 32 / 0.14);
+  --shadow-pink: 0 8px 24px rgb(214 24 124 / 0.28);
+  --shadow-pink-lg: 0 16px 40px rgb(214 24 124 / 0.32);
+
+  /* ── Motion ─────────────────────────────────────────────── */
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --animate-pulse-ring: pulse-ring 2.4s var(--ease-ios) infinite;
+  --animate-float-slow: float-slow 7s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+
+  @keyframes pulse-ring {
+    0% {
+      box-shadow: 0 0 0 0 rgb(37 211 102 / 0.32);
+    }
+    70% {
+      box-shadow: 0 0 0 11px rgb(37 211 102 / 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgb(37 211 102 / 0);
+    }
+  }
+  @keyframes float-slow {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+}
+
+/* ── Glass surfaces (iOS / macOS material) ─────────────────── */
+@utility glass {
+  background: rgb(255 255 255 / 0.62);
+  -webkit-backdrop-filter: blur(24px) saturate(1.7);
+  backdrop-filter: blur(24px) saturate(1.7);
+  border: 1px solid rgb(255 255 255 / 0.65);
+}
+
+@utility glass-strong {
+  background: rgb(255 255 255 / 0.78);
+  -webkit-backdrop-filter: blur(32px) saturate(1.8);
+  backdrop-filter: blur(32px) saturate(1.8);
+  border: 1px solid rgb(255 255 255 / 0.7);
+}
+
+@utility glass-dark {
+  background: rgb(29 21 26 / 0.55);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid rgb(255 255 255 / 0.14);
+}
+
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@utility mb-safe {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-cream-100);
+    color: var(--color-ink-900);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior-y: none;
+  }
+
+  /* Ambient wash behind everything: soft pink light, macOS desktop feel */
+  .ambient {
+    position: fixed;
+    inset: 0;
+    z-index: -10;
+    pointer-events: none;
+    background:
+      radial-gradient(52rem 36rem at 82% -8%, rgb(246 107 175 / 0.16), transparent 65%),
+      radial-gradient(44rem 32rem at -12% 22%, rgb(214 24 124 / 0.1), transparent 60%),
+      radial-gradient(40rem 30rem at 55% 115%, rgb(248 163 206 / 0.14), transparent 60%),
+      linear-gradient(180deg, #fdf9f4 0%, #faf5ef 100%);
+  }
+
+  ::selection {
+    background: var(--color-brand-200);
+    color: var(--color-brand-900);
+  }
+
+  /* macOS-style unobtrusive scrollbars on desktop */
+  @media (pointer: fine) {
+    *::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    *::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    *::-webkit-scrollbar-thumb {
+      background: rgb(36 26 32 / 0.14);
+      border-radius: 999px;
+      border: 3px solid transparent;
+      background-clip: content-box;
+    }
+    *::-webkit-scrollbar-thumb:hover {
+      background: rgb(36 26 32 / 0.26);
+      border: 3px solid transparent;
+      background-clip: content-box;
+    }
+  }
+
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+}

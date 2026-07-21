@@ -1,0 +1,182 @@
+"use client";
+
+import Link from "next/link";
+import Image from "next/image";
+import { useMemo } from "react";
+import { Clock, MapPin, Search } from "lucide-react";
+import Hero from "@/components/home/Hero";
+import TrustBadges from "@/components/home/TrustBadges";
+import SectionHeader from "@/components/SectionHeader";
+import CategoryCard from "@/components/food/CategoryCard";
+import FeatureCard from "@/components/food/FeatureCard";
+import FoodCard from "@/components/food/FoodCard";
+import FoodImage from "@/components/FoodImage";
+import AboutBlock from "@/components/blocks/AboutBlock";
+import ContactBlock from "@/components/blocks/ContactBlock";
+import PaymentBlock from "@/components/blocks/PaymentBlock";
+import SiteFooter from "@/components/blocks/SiteFooter";
+import { BUSINESS, CATEGORIES, GALLERY, IMG } from "@/lib/data";
+import { useMenu } from "@/lib/store";
+
+export default function HomePage() {
+  const items = useMenu((s) => s.items);
+
+  const featured = useMemo(
+    () => items.filter((i) => i.featured && i.available !== false),
+    [items]
+  );
+  const popular = useMemo(
+    () =>
+      items.filter((i) => i.popular && i.available !== false).slice(0, 6),
+    [items]
+  );
+
+  return (
+    <div className="mx-auto max-w-[1020px] px-4 pt-4 sm:px-6 lg:px-8 lg:pt-7">
+      {/* ── Mobile app header ─────────────────────────────────── */}
+      <header className="mb-4 flex items-center gap-3 lg:hidden">
+        <div className="relative h-11 w-11 shrink-0 rounded-2xl bg-white p-1 shadow-soft">
+          <Image
+            src={IMG.logo}
+            alt="The Pastry Picasso"
+            fill
+            sizes="44px"
+            className="object-contain p-1"
+            priority
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-bold tracking-tight text-ink-900">
+            Good food, made fresh <span aria-hidden>❤️</span>
+          </p>
+          <p className="flex items-center gap-1 text-[12px] font-semibold text-ink-500">
+            <MapPin className="h-3 w-3 text-brand-600" />
+            {BUSINESS.city}
+          </p>
+        </div>
+        <Link
+          href="/menu"
+          aria-label="Search the menu"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-ink-700 shadow-soft transition-transform active:scale-90"
+        >
+          <Search className="h-[18px] w-[18px]" />
+        </Link>
+      </header>
+
+      {/* ── Desktop dashboard header ──────────────────────────── */}
+      <header className="mb-6 hidden items-end justify-between lg:flex">
+        <div>
+          <h1 className="font-display text-[30px] font-extrabold tracking-tight text-ink-900">
+            Discover
+          </h1>
+          <p className="mt-0.5 text-[14px] font-medium text-ink-500">
+            What are you craving today?
+          </p>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <span className="glass flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[12.5px] font-bold text-ink-700">
+            <MapPin className="h-3.5 w-3.5 text-brand-600" />
+            Egbeda, Lagos
+          </span>
+          <span className="glass flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[12.5px] font-bold text-ink-700">
+            <Clock className="h-3.5 w-3.5 text-brand-600" />
+            {BUSINESS.hoursText}
+          </span>
+        </div>
+      </header>
+
+      <div className="flex flex-col gap-10 lg:gap-14">
+        <div className="flex flex-col gap-4 lg:gap-5">
+          <Hero />
+          <TrustBadges />
+        </div>
+
+        {/* ── Categories ──────────────────────────────────────── */}
+        <section>
+          <SectionHeader
+            title="Browse categories"
+            sub="From party platters to boba"
+            action={{ href: "/menu", label: "Full menu" }}
+          />
+          <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:px-0">
+            {CATEGORIES.map((c, i) => (
+              <CategoryCard key={c.id} category={c} index={i} size="sm" />
+            ))}
+          </div>
+        </section>
+
+        {/* ── Featured ────────────────────────────────────────── */}
+        <section>
+          <SectionHeader
+            title="Featured this week"
+            sub="The plates everyone is talking about"
+            action={{ href: "/menu", label: "See all" }}
+          />
+          <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-3.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+            {featured.map((item, i) => (
+              <FeatureCard key={item.id} item={item} index={i} />
+            ))}
+          </div>
+        </section>
+
+        {/* ── Popular ─────────────────────────────────────────── */}
+        <section>
+          <SectionHeader
+            title="Popular right now"
+            sub="Ordered again and again"
+            action={{ href: "/menu", label: "Full menu" }}
+          />
+          <div className="flex flex-col gap-2.5 sm:hidden">
+            {popular.map((item, i) => (
+              <FoodCard key={item.id} item={item} variant="row" index={i} />
+            ))}
+          </div>
+          <div className="hidden gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-2">
+            {popular.map((item, i) => (
+              <FoodCard key={item.id} item={item} index={i} />
+            ))}
+          </div>
+        </section>
+
+        {/* ── Gallery preview ─────────────────────────────────── */}
+        <section>
+          <SectionHeader
+            title="Fresh from the kitchen"
+            sub="A peek at what leaves our counter"
+            action={{ href: "/gallery", label: "View gallery" }}
+          />
+          <div className="grid grid-cols-3 gap-2.5 lg:gap-3.5">
+            {GALLERY.slice(1, 4).map((g) => (
+              <Link
+                key={g.src}
+                href="/gallery"
+                className="group block overflow-hidden rounded-[20px] shadow-soft"
+              >
+                <FoodImage
+                  src={g.src}
+                  alt={g.alt}
+                  sizes="(max-width: 1024px) 33vw, 300px"
+                  className="aspect-square w-full"
+                />
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <AboutBlock />
+
+        <section>
+          <SectionHeader
+            title="Get in touch"
+            sub="Orders, events and everything else"
+          />
+          <ContactBlock />
+        </section>
+
+        <PaymentBlock />
+
+        <SiteFooter />
+      </div>
+    </div>
+  );
+}
