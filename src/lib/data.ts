@@ -17,11 +17,6 @@ export interface Category {
   id: CategoryId;
   label: string;
   emoji: string;
-  image: string;
-  /** object-position crop into the source photo */
-  position?: string;
-  /** extra zoom for tight crops out of the big spread photo */
-  zoom?: number;
 }
 
 export interface ExtraOption {
@@ -105,15 +100,15 @@ export const IMG = {
 } as const;
 
 export const CATEGORIES: Category[] = [
-  { id: "small-chops", label: "Small Chops", emoji: "🥟", image: IMG.fried, position: "50% 55%" },
-  { id: "grills", label: "Grills", emoji: "🍗", image: IMG.hero, position: "46% 88%", zoom: 1.7 },
-  { id: "shawarma", label: "Shawarma", emoji: "🌯", image: IMG.hero, position: "80% 52%", zoom: 1.8 },
-  { id: "burgers", label: "Burgers", emoji: "🍔", image: IMG.waffleBurger, position: "52% 42%" },
-  { id: "bubble-tea", label: "Bubble Tea", emoji: "🧋", image: IMG.hero, position: "31% 21%", zoom: 1.9 },
-  { id: "milkshakes", label: "Milkshakes", emoji: "🥤", image: IMG.hero, position: "88% 76%", zoom: 1.9 },
-  { id: "pastries", label: "Pastries", emoji: "🥐", image: IMG.sausageRolls, position: "40% 60%" },
-  { id: "loaded-fries", label: "Loaded Fries", emoji: "🍟", image: IMG.hero, position: "50% 71%", zoom: 2 },
-  { id: "drinks", label: "Drinks", emoji: "🍹", image: IMG.hero, position: "71% 15%", zoom: 1.9 },
+  { id: "small-chops", label: "Small Chops", emoji: "🥟" },
+  { id: "grills", label: "Grills", emoji: "🍗" },
+  { id: "shawarma", label: "Shawarma", emoji: "🌯" },
+  { id: "burgers", label: "Burgers", emoji: "🍔" },
+  { id: "bubble-tea", label: "Bubble Tea", emoji: "🧋" },
+  { id: "milkshakes", label: "Milkshakes", emoji: "🥤" },
+  { id: "pastries", label: "Pastries", emoji: "🥐" },
+  { id: "loaded-fries", label: "Loaded Fries", emoji: "🍟" },
+  { id: "drinks", label: "Drinks", emoji: "🍹" },
 ];
 
 /* ── Per-item extras ───────────────────────────────────────── */
@@ -131,11 +126,6 @@ const SMALL_CHOPS_EXTRAS: ExtraOption[] = [
   { id: "gizzard", name: "Gizzard", price: 500 },
 ];
 
-const SHAWARMA_EXTRAS: ExtraOption[] = [
-  { id: "extra-beef", name: "Extra beef", price: 1000 },
-  { id: "extra-chicken", name: "Extra chicken", price: 1500 },
-  { id: "extra-sausage", name: "Extra sausage", price: 500 },
-];
 
 const BURGER_EXTRAS: ExtraOption[] = [
   { id: "extra-chicken", name: "Extra chicken", price: 1500 },
@@ -143,20 +133,8 @@ const BURGER_EXTRAS: ExtraOption[] = [
   { id: "extra-sausage", name: "Extra sausage", price: 500 },
 ];
 
-const GRILL_EXTRAS: ExtraOption[] = [
-  { id: "extra-chicken", name: "Extra chicken", price: 2000 },
-  { id: "extra-beef", name: "Extra beef", price: 500 },
-  { id: "extra-gizzard", name: "Extra gizzard", price: 500 },
-];
 
-const FRIES_EXTRAS: ExtraOption[] = [
-  { id: "extra-chicken", name: "Extra chicken", price: 1500 },
-  { id: "extra-beef", name: "Extra beef", price: 1000 },
-];
 
-const BOBA_EXTRAS: ExtraOption[] = [
-  { id: "extra-pearls", name: "Extra pearls", price: 500 },
-];
 
 /*
   NOTE FOR THE OWNER:
@@ -211,6 +189,7 @@ export const BASE_MENU: MenuItem[] = [
   {
     id: "all-in-one-platter",
     extras: SMALL_CHOPS_EXTRAS,
+    featured: true,
     name: "All-In-One Small Chops Platter",
     category: "small-chops",
     description:
@@ -229,72 +208,6 @@ export const BASE_MENU: MenuItem[] = [
     popular: true,
   },
 
-  /* ── Grills ──────────────────────────────────────────────── */
-  {
-    id: "grilled-chicken-jollof",
-    extras: GRILL_EXTRAS,
-    name: "Grilled Chicken & Jollof",
-    category: "grills",
-    description:
-      "Smoky char-grilled chicken served over party-style jollof with a proper kick of pepper.",
-    price: 12000,
-    image: IMG.hero,
-    position: "46% 88%",
-    zoom: 1.7,
-    popular: true,
-  },
-  {
-    id: "peppered-gizzard",
-    extras: GRILL_EXTRAS,
-    name: "Peppered Gizzard Skewers",
-    category: "grills",
-    description:
-      "Tender gizzards tossed in our fiery pepper sauce, stacked on skewers.",
-    price: 5000,
-    image: IMG.allInOne,
-    position: "63% 55%",
-    zoom: 1.5,
-  },
-  {
-    id: "peppered-chicken-pack",
-    extras: GRILL_EXTRAS,
-    name: "Peppered Chicken Pack",
-    category: "grills",
-    description:
-      "Juicy chicken pieces smothered in slow-cooked, smoky ata din din.",
-    price: 8000,
-    image: IMG.odogwu,
-    position: "52% 38%",
-    zoom: 1.5,
-  },
-
-  /* ── Shawarma ────────────────────────────────────────────── */
-  {
-    id: "chicken-shawarma",
-    extras: SHAWARMA_EXTRAS,
-    name: "Chicken Shawarma",
-    category: "shawarma",
-    description:
-      "Char-grilled chicken, crunchy veg and garlic mayo rolled in a toasted wrap.",
-    price: 6500,
-    image: IMG.hero,
-    position: "80% 52%",
-    zoom: 1.8,
-    popular: true,
-  },
-  {
-    id: "double-sausage-shawarma",
-    extras: SHAWARMA_EXTRAS,
-    name: "Double Sausage Shawarma",
-    category: "shawarma",
-    description:
-      "The loaded one: double sausage, extra chicken and our house pepper-mayo.",
-    price: 8000,
-    image: IMG.hero,
-    position: "72% 56%",
-    zoom: 2.2,
-  },
-
   /* ── Burgers ─────────────────────────────────────────────── */
   {
     id: "waffle-burger",
@@ -310,71 +223,6 @@ export const BASE_MENU: MenuItem[] = [
     featured: true,
     chefSpecial: true,
   },
-  {
-    id: "crunchy-chicken-burger",
-    extras: BURGER_EXTRAS,
-    name: "Crunchy Chicken Burger",
-    category: "burgers",
-    description:
-      "Double-crisped chicken thigh, melted cheddar and house burger sauce on a toasted sesame bun.",
-    price: 9500,
-    image: IMG.hero,
-    position: "20% 47%",
-    zoom: 1.6,
-    popular: true,
-  },
-
-  /* ── Bubble Tea ──────────────────────────────────────────── */
-  {
-    id: "signature-milk-tea",
-    extras: BOBA_EXTRAS,
-    name: "Signature Milk Tea",
-    category: "bubble-tea",
-    description:
-      "Silky milk tea shaken over chewy tapioca pearls. Our best-loved boba.",
-    price: 4500,
-    image: IMG.hero,
-    position: "31% 21%",
-    zoom: 1.9,
-    popular: true,
-    featured: true,
-  },
-  {
-    id: "strawberry-milk-tea",
-    extras: BOBA_EXTRAS,
-    name: "Strawberry Milk Tea",
-    category: "bubble-tea",
-    description: "Creamy strawberry milk tea with classic boba pearls.",
-    price: 5000,
-    image: IMG.hero,
-    position: "33% 26%",
-    zoom: 2.4,
-  },
-
-  /* ── Milkshakes ──────────────────────────────────────────── */
-  {
-    id: "chocolate-oreo-shake",
-    name: "Chocolate Oreo Shake",
-    category: "milkshakes",
-    description:
-      "Thick chocolate shake blended with Oreo and crowned with whipped cream.",
-    price: 5500,
-    image: IMG.hero,
-    position: "88% 76%",
-    zoom: 1.9,
-    popular: true,
-    featured: true,
-  },
-  {
-    id: "salted-caramel-shake",
-    name: "Salted Caramel Shake",
-    category: "milkshakes",
-    description: "Velvety vanilla shake ribboned with golden salted caramel.",
-    price: 5500,
-    image: IMG.hero,
-    position: "86% 68%",
-    zoom: 2.4,
-  },
 
   /* ── Pastries ────────────────────────────────────────────── */
   {
@@ -389,68 +237,15 @@ export const BASE_MENU: MenuItem[] = [
     popular: true,
     featured: true,
   },
-  {
-    id: "chocolate-drizzle-waffles",
-    name: "Chocolate Drizzle Waffles",
-    category: "pastries",
-    description:
-      "Crisp golden waffles drizzled with chocolate, caramel and cream.",
-    price: 7500,
-    image: IMG.hero,
-    position: "84% 32%",
-    zoom: 1.8,
-  },
+];
 
-  /* ── Loaded Fries ────────────────────────────────────────── */
-  {
-    id: "chicken-loaded-fries",
-    extras: FRIES_EXTRAS,
-    name: "Chicken Loaded Fries",
-    category: "loaded-fries",
-    description:
-      "Golden fries buried under peppered chicken, cheese sauce and our house drizzle.",
-    price: 8500,
-    image: IMG.hero,
-    position: "50% 71%",
-    zoom: 2,
-    popular: true,
-  },
-  {
-    id: "suya-beef-fries",
-    extras: FRIES_EXTRAS,
-    name: "Suya Beef Loaded Fries",
-    category: "loaded-fries",
-    description:
-      "Crispy fries topped with suya-spiced beef, onions and yaji heat.",
-    price: 9000,
-    image: IMG.hero,
-    position: "13% 70%",
-    zoom: 1.9,
-  },
-
-  /* ── Drinks ──────────────────────────────────────────────── */
-  {
-    id: "berry-yoghurt-parfait",
-    name: "Berry Yoghurt Parfait",
-    category: "drinks",
-    description:
-      "Creamy Greek yoghurt layered with granola, strawberries and blueberries.",
-    price: 4000,
-    image: IMG.hero,
-    position: "71% 15%",
-    zoom: 1.9,
-    popular: true,
-  },
-  {
-    id: "chilled-zobo",
-    name: "Chilled Zobo",
-    category: "drinks",
-    description: "House-brewed hibiscus punch: spiced, sweet and ice-cold.",
-    price: 1500,
-    image: IMG.hero,
-    position: "10% 17%",
-    zoom: 1.9,
-  },
+/** Items removed from the default menu in v3 (no dedicated photo yet). */
+export const RETIRED_ITEM_IDS = [
+  "grilled-chicken-jollof", "peppered-gizzard", "peppered-chicken-pack",
+  "chicken-shawarma", "double-sausage-shawarma", "crunchy-chicken-burger",
+  "signature-milk-tea", "strawberry-milk-tea", "chocolate-oreo-shake",
+  "salted-caramel-shake", "chocolate-drizzle-waffles", "chicken-loaded-fries",
+  "suya-beef-fries", "berry-yoghurt-parfait", "chilled-zobo",
 ];
 
 export const GALLERY = [
@@ -506,7 +301,7 @@ export const REVIEW_SEED: ReviewSeedItem[] = [
     id: "rev-chidinma",
     name: "Chidinma O.",
     rating: 4,
-    text: "Milk tea was creamy and the pearls were soft. Delivery to Akowonjo took less than an hour.",
+    text: "Ordered the fried platter for a house party. Delivery to Akowonjo took less than an hour and everything was still hot.",
     source: "Instagram",
     daysAgo: 8,
     visible: true,
@@ -533,7 +328,7 @@ export const REVIEW_SEED: ReviewSeedItem[] = [
     id: "rev-ifeanyi",
     name: "Ifeanyi K.",
     rating: 4,
-    text: "Oreo shake was thick, just how I like it. Would love a bigger cup size but the taste is 100.",
+    text: "The all-in-one box is perfect for two. The puff puff is soft and the gizzard has proper pepper. Taste is 100.",
     source: "WhatsApp",
     daysAgo: 20,
     visible: false,

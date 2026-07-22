@@ -2,8 +2,6 @@
 
 import { motion } from "framer-motion";
 import { ChefHat, Clock, Flame, Timer } from "lucide-react";
-import FoodImage from "@/components/FoodImage";
-import { BUSINESS, IMG } from "@/lib/data";
 import { useSettings } from "@/lib/store";
 
 export default function AboutBlock() {
@@ -18,7 +16,7 @@ export default function AboutBlock() {
 
   return (
     <section className="overflow-hidden rounded-[28px] bg-white shadow-soft">
-      <div className="grid gap-0 lg:grid-cols-[1.15fr_1fr]">
+      <div className="grid gap-0">
         <div className="p-6 sm:p-8 lg:p-10">
           <motion.span
             initial={{ opacity: 0, y: 10 }}
@@ -75,18 +73,6 @@ export default function AboutBlock() {
               </motion.div>
             ))}
           </div>
-        </div>
-
-        <div className="relative hidden min-h-[420px] lg:block">
-          <FoodImage
-            src={IMG.odogwu}
-            alt="Fresh small chops platter being prepared at The Pastry Picasso"
-            position="50% 55%"
-            sizes="480px"
-            className="absolute inset-0"
-            hover={false}
-          />
-          <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-white to-transparent" />
         </div>
       </div>
     </section>

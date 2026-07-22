@@ -4,35 +4,19 @@ import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import FoodImage from "@/components/FoodImage";
 import SiteFooter from "@/components/blocks/SiteFooter";
-import { GALLERY, IMG } from "@/lib/data";
+import { GALLERY } from "@/lib/data";
 import { useLockBody } from "@/lib/hooks";
 
 interface Tile {
   src: string;
   alt: string;
-  position?: string;
-  zoom?: number;
-  /** aspect class for crop tiles; natural ratio when omitted */
-  aspect?: string;
   w: number;
   h: number;
 }
 
-const TILES: Tile[] = [
-  GALLERY[0],
-  { src: IMG.waffleBurger, alt: "Waffle Burger up close", position: "52% 40%", zoom: 1.5, aspect: "aspect-square", w: 960, h: 960 },
-  GALLERY[3],
-  { src: IMG.hero, alt: "Signature milk tea with boba pearls", position: "31% 21%", zoom: 2, aspect: "aspect-[4/5]", w: 853, h: 1066 },
-  GALLERY[2],
-  { src: IMG.hero, alt: "Chocolate Oreo milkshake", position: "88% 76%", zoom: 2, aspect: "aspect-[4/5]", w: 853, h: 1066 },
-  GALLERY[5],
-  { src: IMG.allInOne, alt: "Money bags and golden spring rolls", position: "40% 38%", zoom: 1.8, aspect: "aspect-square", w: 960, h: 960 },
-  GALLERY[1],
-  { src: IMG.hero, alt: "Chocolate drizzle waffles", position: "84% 32%", zoom: 2, aspect: "aspect-[4/5]", w: 853, h: 1066 },
-  GALLERY[4],
-];
+/* Every provided photo, shown exactly once at its natural ratio. */
+const TILES: Tile[] = [...GALLERY];
 
 export default function GalleryPage() {
   const [selected, setSelected] = useState<number | null>(null);
@@ -86,27 +70,16 @@ export default function GalleryPage() {
             className="group mb-3 block w-full overflow-hidden rounded-[22px] shadow-soft transition-shadow duration-300 [break-inside:avoid] hover:shadow-card lg:mb-4"
           >
             <motion.div layoutId={`gallery-${i}`} className="relative">
-              {tile.aspect ? (
-                <FoodImage
+              <span className="block overflow-hidden">
+                <Image
                   src={tile.src}
                   alt={tile.alt}
-                  position={tile.position}
-                  zoom={tile.zoom}
+                  width={tile.w}
+                  height={tile.h}
                   sizes="(max-width: 640px) 50vw, 33vw"
-                  className={`${tile.aspect} w-full`}
+                  className="h-auto w-full transition-transform duration-700 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]"
                 />
-              ) : (
-                <span className="block overflow-hidden">
-                  <Image
-                    src={tile.src}
-                    alt={tile.alt}
-                    width={tile.w}
-                    height={tile.h}
-                    sizes="(max-width: 640px) 50vw, 33vw"
-                    className="h-auto w-full transition-transform duration-700 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]"
-                  />
-                </span>
-              )}
+              </span>
             </motion.div>
           </motion.button>
         ))}

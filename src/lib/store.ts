@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
   BASE_MENU,
+  RETIRED_ITEM_IDS,
   REVIEW_SEED,
   type MenuItem,
   type ReviewSource,
@@ -134,7 +135,24 @@ export const useReviews = create<ReviewsState>()(
       removeReview: (id) =>
         set((s) => ({ reviews: s.reviews.filter((r) => r.id !== id) })),
     }),
-    { name: "tpp-reviews", skipHydration: true }
+    {
+      name: "tpp-reviews",
+      version: 1,
+      skipHydration: true,
+      /* v1: seeded review copy now references only dishes on the menu. */
+      migrate: (persisted) => {
+        const state = persisted as { reviews?: Review[] } | undefined;
+        if (state?.reviews) {
+          state.reviews = state.reviews.map((r) => {
+            const seed = REVIEW_SEED.find((s) => s.id === r.id);
+            return seed
+              ? { ...r, text: seed.text, name: seed.name, rating: seed.rating }
+              : r;
+          });
+        }
+        return persisted;
+      },
+    }
   )
 );
 
@@ -302,15 +320,20 @@ export const useMenu = create<MenuState>()(
     }),
     {
       name: "tpp-menu",
-      version: 2,
+      version: 3,
       skipHydration: true,
-      /* v2: standalone extras became per-item options; drop old extras
-         items and graft the new extras/rating onto persisted menus. */
+      /* v2: standalone extras became per-item options.
+         v3: default items without their own photo were retired; only
+         the owner's photographed dishes ship by default. Owner-created
+         items always survive migration. */
       migrate: (persisted) => {
         const state = persisted as { items?: MenuItem[] } | undefined;
         if (state?.items) {
           state.items = state.items
-            .filter((i) => i.category !== "extras")
+            .filter(
+              (i) =>
+                i.category !== "extras" && !RETIRED_ITEM_IDS.includes(i.id)
+            )
             .map((i) => {
               const base = BASE_MENU.find((b) => b.id === i.id);
               return base

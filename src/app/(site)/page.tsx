@@ -10,13 +10,11 @@ import TrustBadges from "@/components/home/TrustBadges";
 import SectionHeader from "@/components/SectionHeader";
 import CategoryCard from "@/components/food/CategoryCard";
 import FeatureCard from "@/components/food/FeatureCard";
-import FoodCard from "@/components/food/FoodCard";
-import FoodImage from "@/components/FoodImage";
 import ContactBlock from "@/components/blocks/ContactBlock";
 import PaymentBlock from "@/components/blocks/PaymentBlock";
 import ReviewsBlock from "@/components/blocks/ReviewsBlock";
 import SiteFooter from "@/components/blocks/SiteFooter";
-import { BUSINESS, CATEGORIES, GALLERY, IMG } from "@/lib/data";
+import { BUSINESS, CATEGORIES, IMG } from "@/lib/data";
 import { useMenu } from "@/lib/store";
 
 export default function HomePage() {
@@ -26,9 +24,12 @@ export default function HomePage() {
     () => items.filter((i) => i.featured && i.available !== false),
     [items]
   );
-  const popular = useMemo(
+  /* Only categories that actually have dishes show on the site. */
+  const activeCategories = useMemo(
     () =>
-      items.filter((i) => i.popular && i.available !== false).slice(0, 6),
+      CATEGORIES.filter((c) =>
+        items.some((i) => i.category === c.id && i.available !== false)
+      ),
     [items]
   );
 
@@ -139,11 +140,11 @@ export default function HomePage() {
         <section>
           <SectionHeader
             title="Browse categories"
-            sub="From party platters to boba"
+            sub="Party platters, burgers and fresh bakes"
             action={{ href: "/menu", label: "Full menu" }}
           />
           <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:px-0">
-            {CATEGORIES.map((c, i) => (
+            {activeCategories.map((c, i) => (
               <CategoryCard key={c.id} category={c} index={i} size="sm" />
             ))}
           </div>
@@ -159,45 +160,6 @@ export default function HomePage() {
           <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-3.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
             {featured.map((item, i) => (
               <FeatureCard key={item.id} item={item} index={i} />
-            ))}
-          </div>
-        </section>
-
-        {/* ── Popular ─────────────────────────────────────────── */}
-        <section>
-          <SectionHeader
-            title="Popular right now"
-            sub="Ordered again and again"
-            action={{ href: "/menu", label: "Full menu" }}
-          />
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-2">
-            {popular.map((item, i) => (
-              <FoodCard key={item.id} item={item} index={i} />
-            ))}
-          </div>
-        </section>
-
-        {/* ── Gallery preview ─────────────────────────────────── */}
-        <section>
-          <SectionHeader
-            title="Fresh from the kitchen"
-            sub="A peek at what leaves our counter"
-            action={{ href: "/gallery", label: "View gallery" }}
-          />
-          <div className="grid grid-cols-3 gap-2.5 lg:gap-3.5">
-            {GALLERY.slice(1, 4).map((g) => (
-              <Link
-                key={g.src}
-                href="/gallery"
-                className="group block overflow-hidden rounded-[20px] shadow-soft"
-              >
-                <FoodImage
-                  src={g.src}
-                  alt={g.alt}
-                  sizes="(max-width: 1024px) 33vw, 300px"
-                  className="aspect-square w-full"
-                />
-              </Link>
             ))}
           </div>
         </section>
