@@ -7,7 +7,7 @@ import {
   Home,
   UtensilsCrossed,
   ShoppingBag,
-  Heart,
+  PackageSearch,
   CircleUserRound,
 } from "lucide-react";
 import { useCart, cartCount } from "@/lib/store";
@@ -17,7 +17,7 @@ const TABS = [
   { href: "/", label: "Home", icon: Home },
   { href: "/menu", label: "Menu", icon: UtensilsCrossed },
   { href: "/order", label: "Order", icon: ShoppingBag },
-  { href: "/favorites", label: "Favorites", icon: Heart },
+  { href: "/track", label: "Track", icon: PackageSearch },
   { href: "/account", label: "Account", icon: CircleUserRound },
 ];
 
@@ -57,7 +57,6 @@ export default function BottomNav() {
                       active ? "text-brand-600" : "text-ink-400"
                     )}
                     strokeWidth={active ? 2.4 : 2}
-                    fill={active && href === "/favorites" ? "currentColor" : "none"}
                   />
                   {href === "/order" && count > 0 && (
                     <motion.span

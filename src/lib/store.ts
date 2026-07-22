@@ -4,7 +4,6 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
   BASE_MENU,
-  EXTRAS,
   REVIEW_SEED,
   type MenuItem,
   type ReviewSource,
@@ -282,7 +281,7 @@ interface MenuState {
 export const useMenu = create<MenuState>()(
   persist(
     (set) => ({
-      items: [...BASE_MENU, ...EXTRAS],
+      items: [...BASE_MENU],
       upsert: (item) =>
         set((s) => {
           const exists = s.items.some((i) => i.id === item.id);
@@ -299,9 +298,29 @@ export const useMenu = create<MenuState>()(
             i.id === id ? { ...i, available: i.available === false ? undefined : false } : i
           ),
         })),
-      resetMenu: () => set({ items: [...BASE_MENU, ...EXTRAS] }),
+      resetMenu: () => set({ items: [...BASE_MENU] }),
     }),
-    { name: "tpp-menu", version: 1, skipHydration: true }
+    {
+      name: "tpp-menu",
+      version: 2,
+      skipHydration: true,
+      /* v2: standalone extras became per-item options; drop old extras
+         items and graft the new extras/rating onto persisted menus. */
+      migrate: (persisted) => {
+        const state = persisted as { items?: MenuItem[] } | undefined;
+        if (state?.items) {
+          state.items = state.items
+            .filter((i) => i.category !== "extras")
+            .map((i) => {
+              const base = BASE_MENU.find((b) => b.id === i.id);
+              return base
+                ? { ...i, extras: base.extras, rating: base.rating }
+                : i;
+            });
+        }
+        return persisted;
+      },
+    }
   )
 );
 

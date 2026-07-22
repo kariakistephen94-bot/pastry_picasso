@@ -2,23 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, Search, SearchX, X } from "lucide-react";
+import { Search, SearchX, X } from "lucide-react";
 import FoodCard from "@/components/food/FoodCard";
-import FoodImage from "@/components/FoodImage";
 import SiteFooter from "@/components/blocks/SiteFooter";
 import { CATEGORIES, type MenuItem } from "@/lib/data";
-import { useMenu, useCart } from "@/lib/store";
-import { useUI } from "@/lib/ui-store";
-import { naira } from "@/lib/format";
+import { useMenu } from "@/lib/store";
 import { cn } from "@/lib/cn";
 
 export default function MenuPage() {
   const items = useMenu((s) => s.items);
-  const add = useCart((s) => s.add);
-  const cartLines = useCart((s) => s.lines);
-  const showToast = useUI((s) => s.showToast);
-
-  const hasMainInCart = cartLines.some((l) => l.category !== "extras");
 
   const [query, setQuery] = useState("");
   const [active, setActive] = useState<string>(CATEGORIES[0].id);
@@ -35,11 +27,6 @@ export default function MenuPage() {
     }
     return map;
   }, [items]);
-
-  const extras = useMemo(
-    () => items.filter((i) => i.category === "extras"),
-    [items]
-  );
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -64,7 +51,7 @@ export default function MenuPage() {
   /* Scroll-spy for the sticky pills */
   useEffect(() => {
     if (results) return;
-    const sections = [...CATEGORIES.map((c) => c.id), "extras"]
+    const sections = CATEGORIES.map((c) => c.id)
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => !!el);
 
@@ -150,12 +137,7 @@ export default function MenuPage() {
               <p className="mb-4 text-[13px] font-semibold text-ink-500">
                 {results.length} result{results.length === 1 ? "" : "s"}
               </p>
-              <div className="flex flex-col gap-2.5 sm:hidden">
-                {results.map((item, i) => (
-                  <FoodCard key={item.id} item={item} variant="row" index={i} />
-                ))}
-              </div>
-              <div className="hidden gap-4 sm:grid sm:grid-cols-2">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {results.map((item, i) => (
                   <FoodCard key={item.id} item={item} index={i} />
                 ))}
@@ -171,7 +153,7 @@ export default function MenuPage() {
             className="sticky top-0 z-30 -mx-4 mt-4 px-4 pb-2 pt-2 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
           >
             <div className="glass-strong no-scrollbar flex gap-1.5 overflow-x-auto rounded-[22px] p-1.5 shadow-soft">
-              {[...CATEGORIES, { id: "extras", label: "Extras", emoji: "➕" }].map(
+              {CATEGORIES.map(
                 (c) => {
                   const isActive = active === c.id;
                   return (
@@ -221,12 +203,7 @@ export default function MenuPage() {
                       {catItems.length} item{catItems.length === 1 ? "" : "s"}
                     </span>
                   </div>
-                  <div className="flex flex-col gap-2.5 sm:hidden">
-                    {catItems.map((item, i) => (
-                      <FoodCard key={item.id} item={item} variant="row" index={i} />
-                    ))}
-                  </div>
-                  <div className="hidden gap-4 sm:grid sm:grid-cols-2">
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
                     {catItems.map((item, i) => (
                       <FoodCard key={item.id} item={item} index={i} />
                     ))}
@@ -235,76 +212,6 @@ export default function MenuPage() {
               );
             })}
 
-            {/* ── Extras ──────────────────────────────────────── */}
-            <section id="extras" className="scroll-mt-24">
-              <div className="mb-1 flex items-baseline gap-2">
-                <h2 className="font-display text-[19px] font-extrabold tracking-tight text-ink-900 lg:text-[22px]">
-                  <span aria-hidden className="mr-1.5">➕</span>
-                  Add Extras
-                </h2>
-              </div>
-              <p className="mb-4 text-[12.5px] font-medium text-ink-500">
-                {hasMainInCart
-                  ? "Top up your order with your favourites."
-                  : "Extras join a main order. Add a dish first, then top it up."}
-              </p>
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                {extras.map((ex, i) => (
-                  <motion.div
-                    key={ex.id}
-                    initial={{ opacity: 0, y: 14 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: "-20px" }}
-                    transition={{ duration: 0.4, delay: Math.min(i * 0.03, 0.2) }}
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-[20px] bg-white p-2.5 shadow-soft",
-                      ex.available === false && "opacity-60"
-                    )}
-                  >
-                    <FoodImage
-                      src={ex.image}
-                      alt={ex.name}
-                      position={ex.position}
-                      zoom={ex.zoom}
-                      sizes="48px"
-                      className="h-12 w-12 shrink-0 rounded-xl"
-                      hover={false}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[12.5px] font-bold text-ink-900">
-                        {ex.name}
-                      </p>
-                      <p className="text-[12px] font-bold text-brand-600">
-                        {naira(ex.price)}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`Add ${ex.name}`}
-                      disabled={ex.available === false}
-                      onClick={() => {
-                        if (!hasMainInCart) {
-                          showToast("Add a main dish first, then add extras");
-                          return;
-                        }
-                        add(ex);
-                        showToast(`${ex.name} added to your order`);
-                      }}
-                      className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white transition-transform active:scale-90",
-                        ex.available === false
-                          ? "bg-ink-300"
-                          : hasMainInCart
-                            ? "bg-brand-600 shadow-pink hover:bg-brand-500"
-                            : "bg-ink-300"
-                      )}
-                    >
-                      <Plus className="h-4 w-4" strokeWidth={2.8} />
-                    </button>
-                  </motion.div>
-                ))}
-              </div>
-            </section>
           </div>
         </>
       )}

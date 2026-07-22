@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
-import { ReceiptText } from "lucide-react";
+import { ChevronRight, ReceiptText } from "lucide-react";
 import CartView from "@/components/cart/CartView";
 import StatusChip from "@/components/StatusChip";
 import { useOrders } from "@/lib/store";
@@ -43,28 +44,33 @@ export default function OrderPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.4, delay: Math.min(i * 0.04, 0.2) }}
-                className="rounded-[20px] bg-white p-4 shadow-soft"
+                className="rounded-[20px] bg-white shadow-soft transition-shadow hover:shadow-card"
               >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="flex items-center gap-2 text-[13px] font-bold text-ink-900">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
-                      <ReceiptText className="h-4 w-4" />
+                <Link href={`/track?id=${orderRef(o.id)}`} className="block p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-2 text-[13px] font-bold text-ink-900">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
+                        <ReceiptText className="h-4 w-4" />
+                      </span>
+                      {orderRef(o.id)}
                     </span>
-                    Order {orderRef(o.id)}
-                  </span>
-                  <StatusChip status={o.status} />
-                </div>
-                <p className="mt-2.5 line-clamp-1 text-[12.5px] font-medium text-ink-500">
-                  {o.lines.map((l) => `${l.qty}× ${l.name}`).join(" · ")}
-                </p>
-                <div className="mt-2 flex items-center justify-between text-[12px] font-semibold text-ink-400">
-                  <span className="capitalize">
-                    {o.method} · {timeAgo(o.createdAt)}
-                  </span>
-                  <span className="text-[13.5px] font-extrabold text-ink-900">
-                    {naira(o.total)}
-                  </span>
-                </div>
+                    <span className="flex items-center gap-1.5">
+                      <StatusChip status={o.status} />
+                      <ChevronRight className="h-4 w-4 text-ink-300" />
+                    </span>
+                  </div>
+                  <p className="mt-2.5 line-clamp-1 text-[12.5px] font-medium text-ink-500">
+                    {o.lines.map((l) => `${l.qty}× ${l.name}`).join(" · ")}
+                  </p>
+                  <div className="mt-2 flex items-center justify-between text-[12px] font-semibold text-ink-400">
+                    <span className="capitalize">
+                      {o.method} · {timeAgo(o.createdAt)}
+                    </span>
+                    <span className="text-[13.5px] font-extrabold text-ink-900">
+                      {naira(o.total)}
+                    </span>
+                  </div>
+                </Link>
               </motion.div>
             ))}
           </div>

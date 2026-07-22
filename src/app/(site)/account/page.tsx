@@ -5,8 +5,10 @@ import { useMemo } from "react";
 import {
   ChevronRight,
   Clock,
+  FileDown,
   LayoutDashboard,
   MapPin,
+  PackageSearch,
   Phone,
   ReceiptText,
   UserRound,
@@ -16,6 +18,7 @@ import StatusChip from "@/components/StatusChip";
 import PaymentBlock from "@/components/blocks/PaymentBlock";
 import { BUSINESS } from "@/lib/data";
 import { useOrders, useSettings } from "@/lib/store";
+import { downloadReceipt } from "@/lib/receipt";
 import { naira, orderRef, timeAgo } from "@/lib/format";
 import { whatsappChatUrl } from "@/lib/whatsapp";
 
@@ -142,8 +145,8 @@ export default function AccountPage() {
             {myOrders.map((o) => (
               <div key={o.id} className="rounded-[20px] bg-white p-4 shadow-soft">
                 <div className="flex items-center justify-between">
-                  <span className="text-[13px] font-bold text-ink-900">
-                    Order {orderRef(o.id)}
+                  <span className="font-display text-[13.5px] font-extrabold tracking-wide text-ink-900">
+                    {orderRef(o.id)}
                   </span>
                   <StatusChip status={o.status} />
                 </div>
@@ -155,6 +158,23 @@ export default function AccountPage() {
                   <span className="text-[13px] font-extrabold text-ink-900">
                     {naira(o.total)}
                   </span>
+                </div>
+                <div className="mt-3 flex gap-2 border-t border-cream-200 pt-3">
+                  <Link
+                    href={`/track?id=${orderRef(o.id)}`}
+                    className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-cream-100 text-[12px] font-bold text-ink-700 transition-colors hover:text-brand-600"
+                  >
+                    <PackageSearch className="h-3.5 w-3.5" />
+                    Track
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => void downloadReceipt(o)}
+                    className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-cream-100 text-[12px] font-bold text-ink-700 transition-colors hover:text-brand-600"
+                  >
+                    <FileDown className="h-3.5 w-3.5" />
+                    Receipt ({o.paymentVerified ? "Paid" : "Pending"})
+                  </button>
                 </div>
               </div>
             ))}

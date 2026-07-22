@@ -21,10 +21,7 @@ import { fileToDataUrl, slugify } from "@/lib/image";
 import { naira } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
-const ALL_CATS = [
-  ...CATEGORIES.map((c) => ({ id: c.id as string, label: c.label })),
-  { id: "extras", label: "Extras" },
-];
+const ALL_CATS = CATEGORIES.map((c) => ({ id: c.id as string, label: c.label }));
 
 const field =
   "w-full rounded-2xl bg-cream-100 px-4 py-3 text-[13.5px] font-medium text-ink-900 placeholder:text-ink-300 outline-none ring-1 ring-transparent transition focus:bg-white focus:ring-2 focus:ring-brand-300";

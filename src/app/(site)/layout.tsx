@@ -4,6 +4,7 @@ import CartPanel from "@/components/cart/CartPanel";
 import FloatingWhatsApp from "@/components/shell/FloatingWhatsApp";
 import Toast from "@/components/shell/Toast";
 import ItemSheet from "@/components/food/ItemSheet";
+import ExtrasModal from "@/components/food/ExtrasModal";
 import SiteFrame from "@/components/shell/SiteFrame";
 
 export default function SiteLayout({
@@ -19,6 +20,7 @@ export default function SiteLayout({
       <BottomNav />
       <FloatingWhatsApp />
       <ItemSheet />
+      <ExtrasModal />
       <Toast />
     </>
   );

@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Clock, Heart, Sparkles, Users, X } from "lucide-react";
+import { Check, Clock, Sparkles, Users, X } from "lucide-react";
 import FoodImage from "@/components/FoodImage";
 import QuantityStepper from "@/components/QuantityStepper";
 import { useUI } from "@/lib/ui-store";
-import { useCart, useFavorites, useMenu } from "@/lib/store";
+import { useCart } from "@/lib/store";
 import { useLockBody } from "@/lib/hooks";
 import { naira } from "@/lib/format";
-import { BUSINESS } from "@/lib/data";
+import { BUSINESS, composeWithExtras } from "@/lib/data";
 import { cn } from "@/lib/cn";
 
 export default function ItemSheet() {
@@ -17,18 +17,15 @@ export default function ItemSheet() {
   const closeItem = useUI((s) => s.closeItem);
   const showToast = useUI((s) => s.showToast);
   const add = useCart((s) => s.add);
-  const favIds = useFavorites((s) => s.ids);
-  const toggleFav = useFavorites((s) => s.toggle);
-  const menuItems = useMenu((s) => s.items);
 
   const [qty, setQty] = useState(1);
-  const [extrasSel, setExtrasSel] = useState<Record<string, number>>({});
+  const [selected, setSelected] = useState<string[]>([]);
 
   useLockBody(!!item);
 
   useEffect(() => {
     setQty(1);
-    setExtrasSel({});
+    setSelected([]);
   }, [item?.id]);
 
   useEffect(() => {
@@ -37,31 +34,27 @@ export default function ItemSheet() {
     return () => window.removeEventListener("keydown", onKey);
   }, [closeItem]);
 
-  const extras = useMemo(
-    () => menuItems.filter((m) => m.category === "extras" && m.available !== false),
-    [menuItems]
-  );
+  const extras = useMemo(() => item?.extras ?? [], [item]);
 
-  const extrasTotal = useMemo(
+  const extrasSum = useMemo(
     () =>
-      Object.entries(extrasSel).reduce((sum, [id, n]) => {
-        const ex = extras.find((e) => e.id === id);
-        return sum + (ex ? ex.price * n : 0);
-      }, 0),
-    [extrasSel, extras]
+      extras
+        .filter((e) => selected.includes(e.id))
+        .reduce((sum, e) => sum + e.price, 0),
+    [extras, selected]
   );
 
-  const total = item ? item.price * qty + extrasTotal : 0;
+  const total = item ? (item.price + extrasSum) * qty : 0;
   const soldOut = item?.available === false;
-  const isFav = item ? favIds.includes(item.id) : false;
+
+  const toggleExtra = (id: string) =>
+    setSelected((s) =>
+      s.includes(id) ? s.filter((x) => x !== id) : [...s, id]
+    );
 
   const handleAdd = () => {
     if (!item || soldOut) return;
-    add(item, qty);
-    for (const [id, n] of Object.entries(extrasSel)) {
-      const ex = extras.find((e) => e.id === id);
-      if (ex && n > 0) add(ex, n);
-    }
+    add(composeWithExtras(item, selected), qty);
     showToast("Added to your order");
     closeItem();
   };
@@ -114,19 +107,6 @@ export default function ItemSheet() {
                 <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/35 to-transparent" />
 
                 <div className="absolute right-3.5 top-3.5 flex gap-2">
-                  <button
-                    type="button"
-                    aria-label={isFav ? "Remove from favorites" : "Add to favorites"}
-                    onClick={() => toggleFav(item.id)}
-                    className="glass flex h-9 w-9 items-center justify-center rounded-full text-ink-900 transition-transform active:scale-90"
-                  >
-                    <Heart
-                      className={cn(
-                        "h-[18px] w-[18px] transition-colors",
-                        isFav ? "fill-brand-600 text-brand-600" : "text-ink-700"
-                      )}
-                    />
-                  </button>
                   <button
                     type="button"
                     aria-label="Close"
@@ -194,76 +174,48 @@ export default function ItemSheet() {
                   </div>
                 )}
 
-                {item.category !== "extras" && extras.length > 0 && (
+                {extras.length > 0 && (
                   <div className="mt-6">
                     <div className="flex items-baseline justify-between">
                       <h3 className="font-display text-[15px] font-extrabold text-ink-900">
                         Add Extras
                       </h3>
                       <span className="text-[11.5px] font-semibold text-ink-400">
-                        Make it a feast
+                        Applies to each item
                       </span>
                     </div>
-                    <div className="no-scrollbar -mx-5 mt-3 flex gap-2.5 overflow-x-auto px-5 pb-1 sm:-mx-6 sm:px-6">
+                    <div className="mt-3 flex flex-col gap-2">
                       {extras.map((ex) => {
-                        const n = extrasSel[ex.id] ?? 0;
+                        const on = selected.includes(ex.id);
                         return (
-                          <div
+                          <button
                             key={ex.id}
-                            className="w-[126px] shrink-0 rounded-2xl bg-white p-2 shadow-soft"
+                            type="button"
+                            role="checkbox"
+                            aria-checked={on}
+                            onClick={() => toggleExtra(ex.id)}
+                            className={cn(
+                              "flex items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-soft transition-all active:scale-[0.99]",
+                              on && "ring-2 ring-brand-400"
+                            )}
                           >
-                            <FoodImage
-                              src={ex.image}
-                              alt={ex.name}
-                              position={ex.position}
-                              zoom={ex.zoom}
-                              sizes="126px"
-                              className="h-[68px] w-full rounded-xl"
-                              hover={false}
-                            />
-                            <p className="mt-1.5 truncate px-0.5 text-[12px] font-bold text-ink-900">
-                              {ex.name}
-                            </p>
-                            <div className="mt-0.5 flex h-9 items-center px-0.5 pb-0.5">
-                              {n === 0 ? (
-                                <div className="flex w-full items-center justify-between">
-                                  <span className="text-[11.5px] font-bold text-brand-600">
-                                    {naira(ex.price)}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    aria-label={`Add ${ex.name}`}
-                                    onClick={() =>
-                                      setExtrasSel((s) => ({ ...s, [ex.id]: 1 }))
-                                    }
-                                    className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-white shadow-pink transition-transform active:scale-90"
-                                  >
-                                    <span className="mb-px text-[15px] font-bold leading-none">
-                                      +
-                                    </span>
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="flex w-full justify-center">
-                                  <QuantityStepper
-                                    size="sm"
-                                    value={n}
-                                    onInc={() =>
-                                      setExtrasSel((s) => ({ ...s, [ex.id]: n + 1 }))
-                                    }
-                                    onDec={() =>
-                                      setExtrasSel((s) => {
-                                        const next = { ...s };
-                                        if (n <= 1) delete next[ex.id];
-                                        else next[ex.id] = n - 1;
-                                        return next;
-                                      })
-                                    }
-                                  />
-                                </div>
+                            <span
+                              className={cn(
+                                "flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 transition-all",
+                                on
+                                  ? "border-brand-600 bg-brand-600 text-white"
+                                  : "border-brand-300 bg-white text-transparent"
                               )}
-                            </div>
-                          </div>
+                            >
+                              <Check className="h-3 w-3" strokeWidth={4} />
+                            </span>
+                            <span className="flex-1 text-[13.5px] font-semibold text-ink-900">
+                              {ex.name}
+                            </span>
+                            <span className="text-[13px] font-extrabold text-brand-600">
+                              +{naira(ex.price)}
+                            </span>
+                          </button>
                         );
                       })}
                     </div>

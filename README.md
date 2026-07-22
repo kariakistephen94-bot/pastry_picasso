@@ -5,7 +5,16 @@ built with Next.js 15, TypeScript, Tailwind CSS v4, Framer Motion and Zustand.
 
 - **Mobile** → feels like a native iOS app (floating glass tab bar, bottom sheets, safe-area support)
 - **Desktop** → a macOS-style three-column app (glass sidebar · discovery dashboard · live cart panel)
-- **Checkout** → composes the order into a WhatsApp message to **0814 436 3688**
+- **Checkout** → customer copies the Moniepoint details (all fields copyable),
+  transfers, ticks "I have transferred", then submits. The order lands on the
+  order-placed page with tracking ID, receipt download and an optional
+  "Notify us on WhatsApp" button. No automatic WhatsApp redirect.
+- **Email notification** → each submitted order is emailed to the store via
+  FormSubmit (formsubmit.co, no backend). IMPORTANT: the very first order sends
+  a one-time activation email to Otubuoluwakemi5@gmail.com; click "Activate"
+  in it once, and all future orders arrive by email.
+- **Receipts** → downloadable PDF from checkout, tracking or account; stamped PENDING
+  until payment is confirmed in the dashboard, PAID after
 
 ## Run it
 
@@ -19,12 +28,13 @@ npm run build    # production build
 
 | Route | What it is |
 |---|---|
-| `/` | App-style home: hero, categories, featured, popular, about, contact, payment |
+| `/` | App-style home: hero, categories, featured, popular, reviews, contact, payment |
 | `/menu` | Full catalogue with search, sticky category pills, item sheets, extras |
-| `/order` | Cart + WhatsApp checkout + recent orders |
-| `/favorites`, `/account` | Saved dishes · profile & order history |
+| `/order` | Cart + two-step transfer checkout + recent orders |
+| `/track` | Order tracking by tracking ID, status timeline, receipt download |
+| `/account` | Profile, order history with receipts |
 | `/gallery`, `/about`, `/contact` | Masonry gallery with lightbox · story · contact + map link |
-| `/admin` | Owner dashboard: analytics, orders, menu editor (with photo upload), settings |
+| `/admin` | Owner dashboard: analytics, orders (payment confirmation gate), menu editor, reviews manager, settings |
 
 ## Things to know
 

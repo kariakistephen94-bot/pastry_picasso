@@ -2,23 +2,23 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
   Bike,
   Check,
-  Copy,
   Landmark,
-  MessageCircle,
+  MailCheck,
   ShoppingBag,
   Store,
 } from "lucide-react";
 import FoodImage from "@/components/FoodImage";
 import QuantityStepper from "@/components/QuantityStepper";
-import { WhatsAppIcon } from "@/components/icons";
+import BankDetails from "@/components/BankDetails";
 import { useCart, useOrders, useSettings, cartTotal } from "@/lib/store";
-import { whatsappOrderUrl } from "@/lib/whatsapp";
+import { notifyOrderByEmail } from "@/lib/notify";
 import { BUSINESS } from "@/lib/data";
 import { naira, orderRef } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -27,6 +27,7 @@ const field =
   "w-full rounded-2xl bg-white px-4 py-3 text-[14px] font-medium text-ink-900 placeholder:text-ink-300 shadow-soft outline-none ring-1 ring-transparent transition focus:ring-2 focus:ring-brand-300";
 
 export default function CartView({ variant }: { variant: "panel" | "page" }) {
+  const router = useRouter();
   const lines = useCart((s) => s.lines);
   const inc = useCart((s) => s.inc);
   const dec = useCart((s) => s.dec);
@@ -39,17 +40,16 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
   const [method, setMethod] = useState<"pickup" | "delivery">("delivery");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [placed, setPlaced] = useState<{ ref: string; waUrl: string } | null>(
-    null
-  );
+  const [attested, setAttested] = useState(false);
 
   const total = cartTotal(lines);
-  const hasMain = lines.some((l) => l.category !== "extras");
 
   /* If the cart empties, always land back on the order step. */
   useEffect(() => {
-    if (lines.length === 0) setStep("cart");
+    if (lines.length === 0) {
+      setStep("cart");
+      setAttested(false);
+    }
   }, [lines.length]);
 
   const goToPayment = () => {
@@ -61,33 +61,19 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
       setError("Please add a delivery address.");
       return;
     }
-    if (!hasMain) {
-      setError(
-        "Extras go with a main order. Add a dish from the menu first."
-      );
-      return;
-    }
     setError(null);
+    setAttested(false);
     setStep("payment");
   };
 
-  const copyAccount = async () => {
-    try {
-      await navigator.clipboard.writeText(BUSINESS.bank.accountNumber);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      /* clipboard unavailable */
-    }
-  };
-
-  const confirmPayment = () => {
+  const submitOrder = () => {
+    if (!attested) return;
     const orderLines = lines.map((l) => ({
       name: l.name,
       qty: l.qty,
       price: l.price,
     }));
-    const input = {
+    const id = placeOrder({
       customerName: profile.name.trim(),
       phone: profile.phone.trim() || undefined,
       method,
@@ -96,63 +82,17 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
       lines: orderLines,
       total,
       paymentConfirmed: true,
-    };
-    const id = placeOrder(input);
-    const waUrl = whatsappOrderUrl(input);
-    window.open(waUrl, "_blank", "noopener,noreferrer");
-    setPlaced({ ref: orderRef(id), waUrl });
+    });
+
+    const order = useOrders.getState().orders.find((o) => o.id === id);
+    if (order) notifyOrderByEmail(order);
+
     clear();
     setNote("");
     setStep("cart");
+    setAttested(false);
+    router.push(`/order/placed?id=${orderRef(id)}`);
   };
-
-  /* ── Success state ─────────────────────────────────────────── */
-  if (placed) {
-    return (
-      <motion.div
-        initial={{ scale: 0.94, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 300, damping: 24 }}
-        className="flex flex-col items-center px-6 py-10 text-center"
-      >
-        <motion.span
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: "spring", stiffness: 380, damping: 18, delay: 0.1 }}
-          className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-pink-lg"
-        >
-          <Check className="h-9 w-9" strokeWidth={3} />
-        </motion.span>
-        <h3 className="mt-5 font-display text-[22px] font-extrabold tracking-tight text-ink-900">
-          Order submitted!
-        </h3>
-        <p className="mt-1 rounded-full bg-brand-100 px-3 py-1 text-[12px] font-bold text-brand-700">
-          Order {placed.ref}
-        </p>
-        <p className="mt-3 max-w-[300px] text-[13.5px] leading-relaxed text-ink-500">
-          Your order and payment note are in the dashboard. We&apos;ve also
-          opened WhatsApp. Tap send so we can verify your transfer and start
-          preparing.
-        </p>
-        <a
-          href={placed.waUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-6 flex h-12 w-full max-w-[300px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] text-[14.5px] font-bold text-white shadow-float transition-transform hover:scale-[1.02] active:scale-95"
-        >
-          <WhatsAppIcon className="h-5 w-5" />
-          Open WhatsApp again
-        </a>
-        <button
-          type="button"
-          onClick={() => setPlaced(null)}
-          className="mt-3 text-[13px] font-bold text-ink-500 transition-colors hover:text-brand-600"
-        >
-          Done
-        </button>
-      </motion.div>
-    );
-  }
 
   /* ── Empty state ───────────────────────────────────────────── */
   if (lines.length === 0) {
@@ -177,7 +117,7 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
     );
   }
 
-  /* ── Step 2: transfer + confirm payment ────────────────────── */
+  /* ── Step 2: transfer + confirm + submit ───────────────────── */
   if (step === "payment") {
     return (
       <motion.div
@@ -210,71 +150,67 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
             </div>
           </div>
 
-          <div className="mt-4 rounded-2xl bg-cream-100 p-4">
-            <div className="flex items-center justify-between py-1.5">
-              <span className="text-[12.5px] font-semibold text-ink-500">
-                Bank
-              </span>
-              <span className="text-[13.5px] font-bold text-ink-900">
-                {BUSINESS.bank.bankName}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-3 border-t border-cream-300/60 py-1.5">
-              <span className="text-[12.5px] font-semibold text-ink-500">
-                Account name
-              </span>
-              <span className="text-right text-[13px] font-bold text-ink-900">
-                {BUSINESS.bank.accountName}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-3 border-t border-cream-300/60 py-1.5">
-              <span className="text-[12.5px] font-semibold text-ink-500">
-                Account number
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="font-display text-[16px] font-extrabold tabular-nums tracking-wide text-ink-900">
-                  {BUSINESS.bank.accountNumber}
-                </span>
-                <button
-                  type="button"
-                  onClick={copyAccount}
-                  aria-label="Copy account number"
-                  className={cn(
-                    "flex h-7 w-7 items-center justify-center rounded-lg transition-all active:scale-90",
-                    copied
-                      ? "bg-emerald-100 text-emerald-600"
-                      : "bg-white text-ink-500 shadow-soft hover:text-brand-600"
-                  )}
-                >
-                  {copied ? (
-                    <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" />
-                  )}
-                </button>
-              </span>
-            </div>
-          </div>
+          <BankDetails className="mt-4" />
 
           <p className="mt-3 text-[12px] font-medium leading-relaxed text-ink-400">
             Make the transfer from your bank app, then confirm below.
             {method === "delivery" &&
-              " The delivery fee is confirmed separately on WhatsApp."}
+              " The delivery fee is confirmed separately."}
           </p>
         </div>
 
-        <motion.button
+        {/* Confirmation check: required before the submit button appears */}
+        <button
           type="button"
-          whileTap={{ scale: 0.97 }}
-          onClick={confirmPayment}
-          className="mt-4 flex h-[52px] items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 text-[15px] font-bold text-white shadow-pink transition-shadow hover:shadow-pink-lg"
+          role="checkbox"
+          aria-checked={attested}
+          onClick={() => setAttested((a) => !a)}
+          className={cn(
+            "mt-3.5 flex w-full items-start gap-3 rounded-2xl p-4 text-left shadow-soft transition-colors",
+            attested ? "bg-brand-50 ring-1 ring-brand-300" : "bg-white"
+          )}
         >
-          <Check className="h-5 w-5" strokeWidth={2.6} />
-          I have made the payment
-        </motion.button>
-        <p className="mt-2.5 flex items-center justify-center gap-1 text-center text-[11.5px] font-medium text-ink-400">
-          <MessageCircle className="h-3.5 w-3.5" />
-          Your order is submitted and opens in WhatsApp for confirmation.
+          <span
+            className={cn(
+              "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border-2 transition-all",
+              attested
+                ? "border-brand-600 bg-brand-600 text-white"
+                : "border-ink-300 bg-white text-transparent"
+            )}
+          >
+            <Check className="h-4 w-4" strokeWidth={3.5} />
+          </span>
+          <span className="text-[13px] font-semibold leading-relaxed text-ink-700">
+            I have transferred {naira(total)} to the {BUSINESS.bank.bankName}{" "}
+            account above.
+          </span>
+        </button>
+
+        <AnimatePresence initial={false}>
+          {attested && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+              className="overflow-hidden"
+            >
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.97 }}
+                onClick={submitOrder}
+                className="mt-3.5 flex h-[52px] w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 text-[15px] font-bold text-white shadow-pink transition-shadow hover:shadow-pink-lg"
+              >
+                Submit order
+                <ArrowRight className="h-5 w-5" />
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <p className="mt-2.5 flex items-center justify-center gap-1.5 text-center text-[11.5px] font-medium text-ink-400">
+          <MailCheck className="h-3.5 w-3.5" />
+          The store is notified instantly. No WhatsApp redirect.
         </p>
       </motion.div>
     );
@@ -310,11 +246,6 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
                 </p>
                 <p className="text-[12px] font-semibold text-brand-600">
                   {naira(l.price)}
-                  {l.category === "extras" && (
-                    <span className="ml-1.5 rounded-full bg-cream-200 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-500">
-                      Extra
-                    </span>
-                  )}
                 </p>
               </div>
               <div className="flex flex-col items-end gap-1">
@@ -426,7 +357,7 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
         </div>
         {method === "delivery" && (
           <p className="mt-1.5 text-[11.5px] font-medium leading-relaxed text-ink-400">
-            Delivery fee is confirmed on WhatsApp based on your location.
+            Delivery fee is confirmed after your order, based on your location.
           </p>
         )}
         <div className="mt-3 flex items-center justify-between border-t border-cream-200 pt-3">
@@ -435,6 +366,15 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
             {naira(total)}
           </span>
         </div>
+      </div>
+
+      {/* Payment account preview, every field copyable */}
+      <div className="mt-3 rounded-[20px] bg-white p-4 shadow-soft">
+        <p className="mb-2.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-ink-400">
+          <Landmark className="h-3.5 w-3.5 text-brand-600" />
+          Payment account
+        </p>
+        <BankDetails />
       </div>
 
       <motion.button
@@ -448,7 +388,8 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
       </motion.button>
       <p className="mt-2.5 flex items-center justify-center gap-1 text-center text-[11.5px] font-medium text-ink-400">
         <Landmark className="h-3.5 w-3.5" />
-        Next: transfer to our {BUSINESS.bank.bankName} account to confirm.
+        Transfer to the {BUSINESS.bank.bankName} account above to confirm your
+        order.
       </p>
     </div>
   );

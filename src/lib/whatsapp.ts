@@ -1,5 +1,6 @@
 import { BUSINESS } from "./data";
-import { naira } from "./format";
+import { naira, orderRef } from "./format";
+import type { Order } from "./store";
 
 export interface OrderLineInput {
   name: string;
@@ -58,4 +59,19 @@ export function whatsappOrderUrl(input: CheckoutInput): string {
 export function whatsappChatUrl(text?: string): string {
   const q = text ? `?text=${encodeURIComponent(text)}` : "";
   return `https://wa.me/${BUSINESS.whatsappNumber}${q}`;
+}
+
+/** Builds the order message URL from a stored order (for manual notify). */
+export function whatsappOrderUrlFromOrder(order: Order): string {
+  return whatsappOrderUrl({
+    customerName: order.customerName,
+    phone: order.phone,
+    method: order.method,
+    address: order.address,
+    note: order.note,
+    lines: order.lines,
+    total: order.total,
+    paymentConfirmed: order.paymentConfirmed,
+    trackingRef: orderRef(order.id),
+  });
 }

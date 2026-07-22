@@ -24,6 +24,12 @@ export interface Category {
   zoom?: number;
 }
 
+export interface ExtraOption {
+  id: string;
+  name: string;
+  price: number;
+}
+
 export interface MenuItem {
   id: string;
   name: string;
@@ -35,10 +41,25 @@ export interface MenuItem {
   zoom?: number;
   serves?: string;
   includes?: string[];
+  /** Item-specific add-ons, chosen in the extras dialog when adding to cart */
+  extras?: ExtraOption[];
+  rating?: number;
   popular?: boolean;
   featured?: boolean;
   chefSpecial?: boolean;
   available?: boolean; // undefined = available
+}
+
+/** Builds the cart line for an item plus its chosen extras. */
+export function composeWithExtras(item: MenuItem, extraIds: string[]): MenuItem {
+  const chosen = (item.extras ?? []).filter((e) => extraIds.includes(e.id));
+  if (chosen.length === 0) return item;
+  return {
+    ...item,
+    id: `${item.id}::${[...extraIds].sort().join("+")}`,
+    name: `${item.name} (+ ${chosen.map((c) => c.name).join(", ")})`,
+    price: item.price + chosen.reduce((n, c) => n + c.price, 0),
+  };
 }
 
 export const BUSINESS = {
@@ -95,16 +116,61 @@ export const CATEGORIES: Category[] = [
   { id: "drinks", label: "Drinks", emoji: "🍹", image: IMG.hero, position: "71% 15%", zoom: 1.9 },
 ];
 
+/* ── Per-item extras ───────────────────────────────────────── */
+
+const SMALL_CHOPS_EXTRAS: ExtraOption[] = [
+  { id: "samosa", name: "Samosa", price: 400 },
+  { id: "spring-roll", name: "Spring Roll", price: 400 },
+  { id: "chicken", name: "Chicken", price: 2000 },
+  { id: "prawn-mayo", name: "Prawn in Mayo", price: 1500 },
+  { id: "puff-puff", name: "Puff Puff", price: 150 },
+  { id: "money-bag", name: "Money Bag", price: 1500 },
+  { id: "corn-dog", name: "Corn Dog", price: 500 },
+  { id: "turkey", name: "Turkey", price: 6000 },
+  { id: "beef", name: "Beef", price: 500 },
+  { id: "gizzard", name: "Gizzard", price: 500 },
+];
+
+const SHAWARMA_EXTRAS: ExtraOption[] = [
+  { id: "extra-beef", name: "Extra beef", price: 1000 },
+  { id: "extra-chicken", name: "Extra chicken", price: 1500 },
+  { id: "extra-sausage", name: "Extra sausage", price: 500 },
+];
+
+const BURGER_EXTRAS: ExtraOption[] = [
+  { id: "extra-chicken", name: "Extra chicken", price: 1500 },
+  { id: "extra-cheese", name: "Extra cheese", price: 500 },
+  { id: "extra-sausage", name: "Extra sausage", price: 500 },
+];
+
+const GRILL_EXTRAS: ExtraOption[] = [
+  { id: "extra-chicken", name: "Extra chicken", price: 2000 },
+  { id: "extra-beef", name: "Extra beef", price: 500 },
+  { id: "extra-gizzard", name: "Extra gizzard", price: 500 },
+];
+
+const FRIES_EXTRAS: ExtraOption[] = [
+  { id: "extra-chicken", name: "Extra chicken", price: 1500 },
+  { id: "extra-beef", name: "Extra beef", price: 1000 },
+];
+
+const BOBA_EXTRAS: ExtraOption[] = [
+  { id: "extra-pearls", name: "Extra pearls", price: 500 },
+];
+
 /*
   NOTE FOR THE OWNER:
   Prices for "Odogwu Small Chops Platter" (₦45,000) and "All-In-One Small
   Chops Platter" (₦15,000) were not provided and are placeholders. Update
-  them anytime from the Dashboard → Menu.
+  them anytime from the Dashboard → Menu. Extra prices for shawarma,
+  burgers, grills, fries and boba are placeholders too, in
+  src/lib/data.ts.
 */
 export const BASE_MENU: MenuItem[] = [
   /* ── Small Chops ─────────────────────────────────────────── */
   {
     id: "odogwu-platter",
+    extras: SMALL_CHOPS_EXTRAS,
     name: "Odogwu Small Chops Platter",
     category: "small-chops",
     description:
@@ -129,6 +195,7 @@ export const BASE_MENU: MenuItem[] = [
   },
   {
     id: "fried-platter",
+    extras: SMALL_CHOPS_EXTRAS,
     name: "Fried Small Chops Platter",
     category: "small-chops",
     description:
@@ -143,6 +210,7 @@ export const BASE_MENU: MenuItem[] = [
   },
   {
     id: "all-in-one-platter",
+    extras: SMALL_CHOPS_EXTRAS,
     name: "All-In-One Small Chops Platter",
     category: "small-chops",
     description:
@@ -164,6 +232,7 @@ export const BASE_MENU: MenuItem[] = [
   /* ── Grills ──────────────────────────────────────────────── */
   {
     id: "grilled-chicken-jollof",
+    extras: GRILL_EXTRAS,
     name: "Grilled Chicken & Jollof",
     category: "grills",
     description:
@@ -176,6 +245,7 @@ export const BASE_MENU: MenuItem[] = [
   },
   {
     id: "peppered-gizzard",
+    extras: GRILL_EXTRAS,
     name: "Peppered Gizzard Skewers",
     category: "grills",
     description:
@@ -187,6 +257,7 @@ export const BASE_MENU: MenuItem[] = [
   },
   {
     id: "peppered-chicken-pack",
+    extras: GRILL_EXTRAS,
     name: "Peppered Chicken Pack",
     category: "grills",
     description:
@@ -200,6 +271,7 @@ export const BASE_MENU: MenuItem[] = [
   /* ── Shawarma ────────────────────────────────────────────── */
   {
     id: "chicken-shawarma",
+    extras: SHAWARMA_EXTRAS,
     name: "Chicken Shawarma",
     category: "shawarma",
     description:
@@ -212,6 +284,7 @@ export const BASE_MENU: MenuItem[] = [
   },
   {
     id: "double-sausage-shawarma",
+    extras: SHAWARMA_EXTRAS,
     name: "Double Sausage Shawarma",
     category: "shawarma",
     description:
@@ -225,6 +298,7 @@ export const BASE_MENU: MenuItem[] = [
   /* ── Burgers ─────────────────────────────────────────────── */
   {
     id: "waffle-burger",
+    extras: BURGER_EXTRAS,
     name: "Waffle Burger",
     category: "burgers",
     description:
@@ -238,6 +312,7 @@ export const BASE_MENU: MenuItem[] = [
   },
   {
     id: "crunchy-chicken-burger",
+    extras: BURGER_EXTRAS,
     name: "Crunchy Chicken Burger",
     category: "burgers",
     description:
@@ -252,6 +327,7 @@ export const BASE_MENU: MenuItem[] = [
   /* ── Bubble Tea ──────────────────────────────────────────── */
   {
     id: "signature-milk-tea",
+    extras: BOBA_EXTRAS,
     name: "Signature Milk Tea",
     category: "bubble-tea",
     description:
@@ -265,6 +341,7 @@ export const BASE_MENU: MenuItem[] = [
   },
   {
     id: "strawberry-milk-tea",
+    extras: BOBA_EXTRAS,
     name: "Strawberry Milk Tea",
     category: "bubble-tea",
     description: "Creamy strawberry milk tea with classic boba pearls.",
@@ -327,6 +404,7 @@ export const BASE_MENU: MenuItem[] = [
   /* ── Loaded Fries ────────────────────────────────────────── */
   {
     id: "chicken-loaded-fries",
+    extras: FRIES_EXTRAS,
     name: "Chicken Loaded Fries",
     category: "loaded-fries",
     description:
@@ -339,6 +417,7 @@ export const BASE_MENU: MenuItem[] = [
   },
   {
     id: "suya-beef-fries",
+    extras: FRIES_EXTRAS,
     name: "Suya Beef Loaded Fries",
     category: "loaded-fries",
     description:
@@ -374,20 +453,6 @@ export const BASE_MENU: MenuItem[] = [
   },
 ];
 
-/* ── Extras (reusable add-ons) ─────────────────────────────── */
-export const EXTRAS: MenuItem[] = [
-  { id: "extra-samosa", name: "Samosa", category: "extras", price: 400, image: IMG.fried, position: "45% 58%", zoom: 2 },
-  { id: "extra-spring-roll", name: "Spring Roll", category: "extras", price: 400, image: IMG.fried, position: "18% 66%", zoom: 2 },
-  { id: "extra-chicken", name: "Chicken", category: "extras", price: 2000, image: IMG.odogwu, position: "48% 38%", zoom: 2 },
-  { id: "extra-prawn-mayo", name: "Prawn in Mayo", category: "extras", price: 1500, image: IMG.allInOne, position: "44% 38%", zoom: 2.2 },
-  { id: "extra-puff-puff", name: "Puff Puff", category: "extras", price: 150, image: IMG.fried, position: "68% 33%", zoom: 2 },
-  { id: "extra-money-bag", name: "Money Bag", category: "extras", price: 1500, image: IMG.allInOne, position: "38% 34%", zoom: 2.2 },
-  { id: "extra-corn-dog", name: "Corn Dog", category: "extras", price: 500, image: IMG.odogwu, position: "38% 72%", zoom: 2 },
-  { id: "extra-turkey", name: "Turkey", category: "extras", price: 6000, image: IMG.odogwu, position: "60% 42%", zoom: 2.2 },
-  { id: "extra-beef", name: "Beef", category: "extras", price: 500, image: IMG.allInOne, position: "68% 58%", zoom: 2.2 },
-  { id: "extra-gizzard", name: "Gizzard", category: "extras", price: 500, image: IMG.allInOne, position: "58% 52%", zoom: 2.2 },
-];
-
 export const GALLERY = [
   { src: IMG.hero, alt: "The Pastry Picasso spread: burgers, bubble tea, shawarma, waffles and shakes", w: 853, h: 1280 },
   { src: IMG.waffleBurger, alt: "Signature Waffle Burger with crunchy chicken and cheese", w: 960, h: 1280 },
@@ -406,7 +471,7 @@ export const TRUST_BADGES = [
 
 /* ── Reviews (seed content, curated from the dashboard) ────── */
 
-export type ReviewSource = "Instagram" | "WhatsApp" | "TikTok" | "In store";
+export type ReviewSource = "Instagram" | "WhatsApp" | "TikTok" | "In store" | "Website";
 
 export interface ReviewSeedItem {
   id: string;

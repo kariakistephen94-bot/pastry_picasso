@@ -2,29 +2,11 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, Copy, Landmark } from "lucide-react";
-import { BUSINESS } from "@/lib/data";
-import { cn } from "@/lib/cn";
+import { ChevronDown, Landmark } from "lucide-react";
+import BankDetails from "@/components/BankDetails";
 
 export default function PaymentBlock({ defaultOpen = false }: { defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
-  const [copied, setCopied] = useState(false);
-
-  const copyAccount = async () => {
-    try {
-      await navigator.clipboard.writeText(BUSINESS.bank.accountNumber);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      /* clipboard unavailable */
-    }
-  };
-
-  const rows = [
-    { label: "Bank", value: BUSINESS.bank.bankName },
-    { label: "Account name", value: BUSINESS.bank.accountName },
-    { label: "Account number", value: BUSINESS.bank.accountNumber, copy: true },
-  ];
 
   return (
     <section className="overflow-hidden rounded-[26px] bg-white shadow-soft">
@@ -64,50 +46,7 @@ export default function PaymentBlock({ defaultOpen = false }: { defaultOpen?: bo
             className="overflow-hidden"
           >
             <div className="px-5 pb-5 sm:px-6 sm:pb-6">
-              <div className="rounded-[20px] bg-cream-100 p-4">
-                {rows.map((row, i) => (
-                  <div
-                    key={row.label}
-                    className={cn(
-                      "flex items-center justify-between gap-3 py-2.5",
-                      i > 0 && "border-t border-cream-300/60"
-                    )}
-                  >
-                    <span className="text-[12.5px] font-semibold text-ink-500">
-                      {row.label}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "text-[13.5px] font-bold text-ink-900",
-                          row.copy && "font-display text-[16px] tracking-wide tabular-nums"
-                        )}
-                      >
-                        {row.value}
-                      </span>
-                      {row.copy && (
-                        <button
-                          type="button"
-                          onClick={copyAccount}
-                          aria-label="Copy account number"
-                          className={cn(
-                            "flex h-7 w-7 items-center justify-center rounded-lg transition-all active:scale-90",
-                            copied
-                              ? "bg-emerald-100 text-emerald-600"
-                              : "bg-white text-ink-500 shadow-soft hover:text-brand-600"
-                          )}
-                        >
-                          {copied ? (
-                            <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                          ) : (
-                            <Copy className="h-3.5 w-3.5" />
-                          )}
-                        </button>
-                      )}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <BankDetails />
               <p className="mt-3 text-[12px] font-medium leading-relaxed text-ink-400">
                 After payment, please share your receipt with us on WhatsApp so
                 we can confirm your order right away.

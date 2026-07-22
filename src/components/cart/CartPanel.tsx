@@ -11,8 +11,8 @@ export default function CartPanel() {
   const lines = useCart((s) => s.lines);
   const count = cartCount(lines);
 
-  // The /order page renders the full cart itself.
-  if (pathname === "/order") return null;
+  // The /order pages render the full cart / confirmation themselves.
+  if (pathname.startsWith("/order")) return null;
 
   return (
     <aside className="fixed inset-y-0 right-0 z-40 hidden w-[376px] p-4 pl-0 xl:block">

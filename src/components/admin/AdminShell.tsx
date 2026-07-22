@@ -10,6 +10,7 @@ import {
   ClipboardList,
   LayoutDashboard,
   Settings,
+  Star,
   UtensilsCrossed,
 } from "lucide-react";
 import { useOrders } from "@/lib/store";
@@ -20,6 +21,7 @@ const NAV = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/orders", label: "Orders", icon: ClipboardList },
   { href: "/admin/menu", label: "Menu", icon: UtensilsCrossed },
+  { href: "/admin/reviews", label: "Reviews", icon: Star },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 

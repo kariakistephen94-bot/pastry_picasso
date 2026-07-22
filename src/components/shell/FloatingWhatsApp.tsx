@@ -8,7 +8,7 @@ import { cn } from "@/lib/cn";
 
 export default function FloatingWhatsApp() {
   const pathname = usePathname();
-  const onOrder = pathname === "/order";
+  const onOrder = pathname.startsWith("/order");
 
   return (
     <motion.a
