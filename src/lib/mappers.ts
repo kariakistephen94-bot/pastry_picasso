@@ -54,7 +54,12 @@ export function menuItemToRow(item: MenuItem) {
 
 /* ── Orders ────────────────────────────────────────────────── */
 
-export type OrderStatus = "new" | "preparing" | "ready" | "completed";
+export type OrderStatus =
+  | "new"
+  | "preparing"
+  | "ready"
+  | "completed"
+  | "cancelled";
 
 export interface OrderLine {
   name: string;

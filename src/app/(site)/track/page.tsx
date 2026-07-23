@@ -228,67 +228,78 @@ export default function TrackPage() {
             <StatusChip status={activeOrder.status} />
           </div>
 
-          {/* Timeline */}
-          <div className="px-5 py-5">
-            <ol className="relative">
-              {steps.map((st, i) => {
-                const isCurrent = i === currentIdx;
-                const isLast = i === steps.length - 1;
-                return (
-                  <motion.li
-                    key={st.key}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.08, duration: 0.4 }}
-                    className="relative flex gap-3.5 pb-6 last:pb-0"
-                  >
-                    {!isLast && (
-                      <span
-                        className={cn(
-                          "absolute left-[13px] top-7 h-[calc(100%-24px)] w-0.5 rounded-full",
-                          st.done ? "bg-brand-400" : "bg-cream-200"
-                        )}
-                      />
-                    )}
-                    <span
-                      className={cn(
-                        "relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
-                        st.done
-                          ? "bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-pink"
-                          : isCurrent
-                            ? "bg-white text-brand-600 ring-2 ring-brand-400"
-                            : "bg-cream-200 text-ink-300"
-                      )}
+          {/* Timeline or Cancelled Status */}
+          {activeOrder.status === "cancelled" ? (
+            <div className="px-5 py-8 text-center bg-red-50/50 border-y border-red-100">
+              <p className="font-display text-[18px] font-extrabold text-red-600">
+                Order Cancelled
+              </p>
+              <p className="mt-1.5 text-[12.5px] font-medium leading-relaxed text-ink-500 max-w-[280px] mx-auto">
+                This order was cancelled. If you have any questions, please contact support on WhatsApp.
+              </p>
+            </div>
+          ) : (
+            <div className="px-5 py-5">
+              <ol className="relative">
+                {steps.map((st, i) => {
+                  const isCurrent = i === currentIdx;
+                  const isLast = i === steps.length - 1;
+                  return (
+                    <motion.li
+                      key={st.key}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.08, duration: 0.4 }}
+                      className="relative flex gap-3.5 pb-6 last:pb-0"
                     >
-                      {st.done ? (
-                        <Check className="h-3.5 w-3.5" strokeWidth={3.5} />
-                      ) : (
+                      {!isLast && (
                         <span
                           className={cn(
-                            "h-2 w-2 rounded-full",
-                            isCurrent ? "animate-pulse bg-brand-500" : "bg-ink-300"
+                            "absolute left-[13px] top-7 h-[calc(100%-24px)] w-0.5 rounded-full",
+                            st.done ? "bg-brand-400" : "bg-cream-200"
                           )}
                         />
                       )}
-                    </span>
-                    <div className="pt-0.5">
-                      <p
+                      <span
                         className={cn(
-                          "text-[13.5px] font-bold",
-                          st.done || isCurrent ? "text-ink-900" : "text-ink-400"
+                          "relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                          st.done
+                            ? "bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-pink"
+                            : isCurrent
+                              ? "bg-white text-brand-600 ring-2 ring-brand-400"
+                              : "bg-cream-200 text-ink-300"
                         )}
                       >
-                        {st.label}
-                      </p>
-                      <p className="text-[12px] font-medium text-ink-400">
-                        {st.desc}
-                      </p>
-                    </div>
-                  </motion.li>
-                );
-              })}
-            </ol>
-          </div>
+                        {st.done ? (
+                          <Check className="h-3.5 w-3.5" strokeWidth={3.5} />
+                        ) : (
+                          <span
+                            className={cn(
+                              "h-2 w-2 rounded-full",
+                              isCurrent ? "animate-pulse bg-brand-500" : "bg-ink-300"
+                            )}
+                          />
+                        )}
+                      </span>
+                      <div className="pt-0.5">
+                        <p
+                          className={cn(
+                            "text-[13.5px] font-bold",
+                            st.done || isCurrent ? "text-ink-900" : "text-ink-400"
+                          )}
+                        >
+                          {st.label}
+                        </p>
+                        <p className="text-[12px] font-medium text-ink-400">
+                          {st.desc}
+                        </p>
+                      </div>
+                    </motion.li>
+                  );
+                })}
+              </ol>
+            </div>
+          )}
 
           {/* Items */}
           <div className="mx-5 rounded-2xl bg-cream-100 px-4 py-3">

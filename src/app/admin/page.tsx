@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -12,134 +12,130 @@ import {
   Timer,
 } from "lucide-react";
 import StatusChip from "@/components/StatusChip";
-import { RevenueBars, TopItemsBars, type DayPoint } from "@/components/admin/charts";
-import { useOrders } from "@/lib/store";
+import { RevenueBars, TopItemsBars, type DayPoint, type ItemStat } from "@/components/admin/charts";
+import { api } from "@/lib/api";
+import type { Order } from "@/lib/store";
 import { naira, orderRef, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
-const DAY = 86_400_000;
+type Range = "7d" | "30d" | "3m" | "1y";
 
-function startOfDay(ts: number) {
-  const d = new Date(ts);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
+const RANGES: { id: Range; label: string; short: string }[] = [
+  { id: "7d", label: "7 days", short: "7 days" },
+  { id: "30d", label: "30 days", short: "30 days" },
+  { id: "3m", label: "3 months", short: "3 months" },
+  { id: "1y", label: "1 year", short: "12 months" },
+];
+
+interface Stats {
+  rangeLabel: string;
+  kpis: {
+    revenue: number;
+    revDelta: number | null;
+    orders: number;
+    orderDelta: number | null;
+    avg: number;
+    pending: number;
+  };
+  series: DayPoint[];
+  topItems: ItemStat[];
+  recent: Order[];
 }
 
 export default function AdminOverview() {
-  const orders = useOrders((s) => s.orders);
+  const [range, setRange] = useState<Range>("7d");
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const stats = useMemo(() => {
-    const now = Date.now();
-    const weekAgo = now - 7 * DAY;
-    const twoWeeksAgo = now - 14 * DAY;
-
-    const last7 = orders.filter((o) => o.createdAt >= weekAgo);
-    const prev7 = orders.filter(
-      (o) => o.createdAt >= twoWeeksAgo && o.createdAt < weekAgo
-    );
-
-    const revenue = last7.reduce((n, o) => n + o.total, 0);
-    const prevRevenue = prev7.reduce((n, o) => n + o.total, 0);
-    const avg = last7.length ? Math.round(revenue / last7.length) : 0;
-    const pending = orders.filter(
-      (o) => o.status === "new" || o.status === "preparing"
-    ).length;
-
-    const days: DayPoint[] = Array.from({ length: 7 }, (_, i) => {
-      const dayStart = startOfDay(now - (6 - i) * DAY);
-      const value = orders
-        .filter((o) => o.createdAt >= dayStart && o.createdAt < dayStart + DAY)
-        .reduce((n, o) => n + o.total, 0);
-      return {
-        label: new Date(dayStart).toLocaleDateString("en-NG", { weekday: "short" }),
-        value,
-        isToday: i === 6,
-      };
-    });
-
-    const itemMap = new Map<string, number>();
-    for (const o of last7) {
-      for (const l of o.lines) {
-        itemMap.set(l.name, (itemMap.get(l.name) ?? 0) + l.qty);
-      }
+  const load = useCallback(async (r: Range) => {
+    setLoading(true);
+    try {
+      const data = await api.get<Stats>(`/api/admin/stats?range=${r}`, { auth: true });
+      setStats(data);
+    } catch (err) {
+      console.error("Failed to load dashboard stats:", err);
+    } finally {
+      setLoading(false);
     }
-    const topItems = [...itemMap.entries()]
-      .map(([name, qty]) => ({ name, qty }))
-      .sort((a, b) => b.qty - a.qty)
-      .slice(0, 5);
+  }, []);
 
-    const revDelta =
-      prevRevenue > 0
-        ? Math.round(((revenue - prevRevenue) / prevRevenue) * 100)
-        : null;
-    const orderDelta =
-      prev7.length > 0
-        ? Math.round(((last7.length - prev7.length) / prev7.length) * 100)
-        : null;
+  useEffect(() => {
+    load(range);
+  }, [range, load]);
 
-    return {
-      revenue,
-      revDelta,
-      orders7: last7.length,
-      orderDelta,
-      avg,
-      pending,
-      days,
-      topItems,
-    };
-  }, [orders]);
+  const short = RANGES.find((r) => r.id === range)?.short ?? "";
+  const k = stats?.kpis;
 
   const cards = [
     {
       icon: Banknote,
       tint: "bg-brand-100 text-brand-700",
-      label: "Revenue · 7 days",
-      value: naira(stats.revenue),
-      delta: stats.revDelta,
+      label: `Revenue · ${short}`,
+      value: naira(k?.revenue ?? 0),
+      delta: k?.revDelta ?? null,
     },
     {
       icon: ReceiptText,
       tint: "bg-blue-50 text-blue-600",
-      label: "Orders · 7 days",
-      value: String(stats.orders7),
-      delta: stats.orderDelta,
+      label: `Orders · ${short}`,
+      value: String(k?.orders ?? 0),
+      delta: k?.orderDelta ?? null,
     },
     {
       icon: Flame,
       tint: "bg-amber-50 text-amber-600",
       label: "Avg order value",
-      value: naira(stats.avg),
+      value: naira(k?.avg ?? 0),
       delta: null,
     },
     {
       icon: Timer,
       tint: "bg-emerald-50 text-emerald-600",
       label: "Open orders",
-      value: String(stats.pending),
+      value: String(k?.pending ?? 0),
       delta: null,
     },
   ];
 
-  const recent = orders.slice(0, 6);
-
   return (
     <div className="mx-auto max-w-[1080px]">
-      <header className="mb-5 lg:mb-7">
-        <h1 className="font-display text-[24px] font-extrabold tracking-tight text-ink-900 lg:text-[28px]">
-          Overview
-        </h1>
-        <p className="mt-0.5 text-[13px] font-medium text-ink-500">
-          {new Date().toLocaleDateString("en-NG", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-          })}{" "}
-          · here&apos;s how the kitchen is doing.
-        </p>
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-3 lg:mb-7">
+        <div>
+          <h1 className="font-display text-[24px] font-extrabold tracking-tight text-ink-900 lg:text-[28px]">
+            Overview
+          </h1>
+          <p className="mt-0.5 text-[13px] font-medium text-ink-500">
+            {new Date().toLocaleDateString("en-NG", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            })}{" "}
+            · here&apos;s how the kitchen is doing.
+          </p>
+        </div>
+
+        {/* Range selector */}
+        <div className="no-scrollbar flex gap-1 overflow-x-auto rounded-2xl bg-white p-1 shadow-soft">
+          {RANGES.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setRange(r.id)}
+              className={cn(
+                "shrink-0 rounded-xl px-3.5 py-2 text-[12.5px] font-bold transition-colors cursor-pointer",
+                range === r.id
+                  ? "bg-ink-900 text-white shadow-card"
+                  : "text-ink-500 hover:text-ink-900"
+              )}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
       </header>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className={cn("grid grid-cols-2 gap-3 xl:grid-cols-4", loading && "opacity-60")}>
         {cards.map(({ icon: Icon, tint, label, value, delta }) => (
           <div key={label} className="rounded-[22px] bg-white p-4 shadow-soft">
             <div className="flex items-center justify-between">
@@ -179,20 +175,20 @@ export default function AdminOverview() {
         <div className="rounded-[24px] bg-white p-5 shadow-soft">
           <div className="mb-5 flex items-baseline justify-between">
             <h2 className="font-display text-[15.5px] font-extrabold text-ink-900">
-              Revenue · last 7 days
+              Revenue · {stats?.rangeLabel ?? short}
             </h2>
             <span className="text-[11.5px] font-bold text-ink-400">
               incl. open orders
             </span>
           </div>
-          <RevenueBars days={stats.days} />
+          <RevenueBars days={stats?.series ?? []} />
         </div>
 
         <div className="rounded-[24px] bg-white p-5 shadow-soft">
           <h2 className="mb-5 font-display text-[15.5px] font-extrabold text-ink-900">
-            Top sellers · 7 days
+            Top sellers · {short}
           </h2>
-          <TopItemsBars items={stats.topItems} />
+          <TopItemsBars items={stats?.topItems ?? []} />
         </div>
       </div>
 
@@ -209,13 +205,13 @@ export default function AdminOverview() {
             All orders <ChevronRight className="h-4 w-4" />
           </Link>
         </div>
-        {recent.length === 0 ? (
+        {!stats?.recent.length ? (
           <p className="py-8 text-center text-[12.5px] font-semibold text-ink-400">
-            Orders placed in the app will appear here.
+            {loading ? "Loading…" : "Orders placed in the app will appear here."}
           </p>
         ) : (
           <ul className="divide-y divide-cream-200">
-            {recent.map((o) => (
+            {stats.recent.map((o) => (
               <li key={o.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-center gap-x-2 text-[13px] font-bold text-ink-900">
@@ -223,11 +219,6 @@ export default function AdminOverview() {
                     <span className="font-semibold text-ink-400">
                       {orderRef(o.id)}
                     </span>
-                    {o.sample && (
-                      <span className="rounded-full bg-cream-200 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-500">
-                        Sample
-                      </span>
-                    )}
                   </p>
                   <p className="mt-0.5 line-clamp-1 text-[12px] font-medium text-ink-500">
                     {o.lines.map((l) => `${l.qty}× ${l.name}`).join(" · ")}

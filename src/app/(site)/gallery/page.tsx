@@ -5,8 +5,11 @@ import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import SiteFooter from "@/components/blocks/SiteFooter";
+import Pagination from "@/components/Pagination";
 import { GALLERY } from "@/lib/data";
 import { useLockBody } from "@/lib/hooks";
+
+const PER_PAGE = 9;
 
 interface Tile {
   src: string;
@@ -20,7 +23,12 @@ const TILES: Tile[] = [...GALLERY];
 
 export default function GalleryPage() {
   const [selected, setSelected] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
   useLockBody(selected !== null);
+
+  const totalPages = Math.max(1, Math.ceil(TILES.length / PER_PAGE));
+  const start = (page - 1) * PER_PAGE;
+  const visible = TILES.slice(start, start + PER_PAGE);
 
   const prev = useCallback(
     () => setSelected((s) => (s === null ? null : (s + TILES.length - 1) % TILES.length)),
@@ -57,7 +65,9 @@ export default function GalleryPage() {
 
       {/* Masonry */}
       <div className="mt-5 columns-2 gap-3 sm:columns-3 lg:gap-4">
-        {TILES.map((tile, i) => (
+        {visible.map((tile, localIndex) => {
+          const i = start + localIndex;
+          return (
           <motion.button
             key={`${tile.src}-${i}`}
             type="button"
@@ -65,7 +75,7 @@ export default function GalleryPage() {
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-30px" }}
-            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: (i % 3) * 0.06 }}
+            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: (localIndex % 3) * 0.06 }}
             onClick={() => setSelected(i)}
             className="group mb-3 block w-full overflow-hidden rounded-[22px] shadow-soft transition-shadow duration-300 [break-inside:avoid] hover:shadow-card lg:mb-4"
           >
@@ -82,8 +92,11 @@ export default function GalleryPage() {
               </span>
             </motion.div>
           </motion.button>
-        ))}
+          );
+        })}
       </div>
+
+      <Pagination page={page} totalPages={totalPages} onPage={setPage} />
 
       {/* Lightbox */}
       <AnimatePresence>

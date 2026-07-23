@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { admin, ok, guard, requireAdmin } from "@/lib/api-server";
+import { admin, guard, requireAdmin, parsePage, paginated } from "@/lib/api-server";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +21,16 @@ function phoneKey(phone?: string | null): string {
   return digits.length > 10 ? digits.slice(-10) : digits;
 }
 
+/** VIP ≥ 5 orders, Returning ≥ 2, otherwise New. */
+function segmentOf(orderCount: number): "new" | "returning" | "vip" {
+  if (orderCount >= 5) return "vip";
+  if (orderCount >= 2) return "returning";
+  return "new";
+}
+
 /**
  * Customer directory: registered accounts merged with guest orders, grouped
- * by phone number. Aggregated on the server so the client just renders it.
+ * by phone number, then filtered/searched and paginated on the server.
  * Admin only.
  */
 export async function GET(req: Request) {
@@ -31,22 +38,29 @@ export async function GET(req: Request) {
     const auth = await requireAdmin(req);
     if (auth instanceof NextResponse) return auth;
 
+    const url = new URL(req.url);
+    const { page, limit, from, to } = parsePage(req);
+    const filter = url.searchParams.get("filter") || "all";
+    const q = (url.searchParams.get("q") || "").trim().toLowerCase();
+
     const db = admin();
     const [{ data: profiles }, { data: orders }] = await Promise.all([
       db
         .from("profiles")
         .select("id, email, full_name, phone, role")
         .order("created_at", { ascending: false }),
-      db.from("orders").select("user_id, customer_name, phone, total, created_at"),
+      db
+        .from("orders")
+        .select("user_id, customer_name, phone, total, created_at, status"),
     ]);
 
-    const orderList = orders ?? [];
+    // Cancelled orders don't count toward a customer's spend or segment.
+    const orderList = (orders ?? []).filter((o: any) => o.status !== "cancelled");
 
     const registered: CustomerRow[] = (profiles ?? []).map((p: any) => {
       const pKey = phoneKey(p.phone);
       const mine = orderList.filter(
-        (o: any) =>
-          o.user_id === p.id || (pKey !== "" && phoneKey(o.phone) === pKey)
+        (o: any) => o.user_id === p.id || (pKey !== "" && phoneKey(o.phone) === pKey)
       );
       return {
         key: `user:${p.id}`,
@@ -99,11 +113,37 @@ export async function GET(req: Request) {
       }
     }
 
-    const customers = [...registered, ...guests.values()].sort((a, b) => {
+    const all = [...registered, ...guests.values()].sort((a, b) => {
       if (b.orderCount !== a.orderCount) return b.orderCount - a.orderCount;
       return (b.lastOrderAt ?? 0) - (a.lastOrderAt ?? 0);
     });
 
-    return ok({ customers, currentUserId: auth.id });
+    // Segment totals for the summary cards (over everyone, ignoring search).
+    const counts = {
+      all: all.length,
+      new: all.filter((r) => segmentOf(r.orderCount) === "new").length,
+      returning: all.filter((r) => segmentOf(r.orderCount) === "returning").length,
+      vip: all.filter((r) => segmentOf(r.orderCount) === "vip").length,
+      admins: all.filter((r) => r.role === "admin").length,
+    };
+
+    const filtered = all.filter((r) => {
+      if (filter === "admins" && r.role !== "admin") return false;
+      if (filter !== "all" && filter !== "admins" && segmentOf(r.orderCount) !== filter)
+        return false;
+      if (!q) return true;
+      return (
+        r.name.toLowerCase().includes(q) ||
+        r.email.toLowerCase().includes(q) ||
+        r.phone.includes(q)
+      );
+    });
+
+    const pageRows = filtered.slice(from, to + 1);
+
+    return paginated(pageRows, filtered.length, { page, limit, from, to }, {
+      counts,
+      currentUserId: auth.id,
+    });
   });
 }

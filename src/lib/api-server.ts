@@ -52,6 +52,46 @@ export function guard(
   });
 }
 
+/* ── Pagination ────────────────────────────────────────────── */
+
+export interface PageParams {
+  page: number;
+  limit: number;
+  /** Inclusive Supabase .range() bounds. */
+  from: number;
+  to: number;
+}
+
+/**
+ * Reads ?page & ?limit from the request. page is 1-based; limit is clamped
+ * to [1, maxLimit] so a client can never ask for an unbounded scan.
+ */
+export function parsePage(req: Request, defaultLimit = 10, maxLimit = 50): PageParams {
+  const url = new URL(req.url);
+  const page = Math.max(1, Math.floor(Number(url.searchParams.get("page")) || 1));
+  const raw = Math.floor(Number(url.searchParams.get("limit")) || defaultLimit);
+  const limit = Math.min(maxLimit, Math.max(1, raw));
+  const from = (page - 1) * limit;
+  return { page, limit, from, to: from + limit - 1 };
+}
+
+/** Standard paginated envelope. */
+export function paginated<T>(
+  rows: T[],
+  total: number,
+  { page, limit }: PageParams,
+  extra: Record<string, unknown> = {}
+) {
+  return ok({
+    data: rows,
+    page,
+    limit,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+    ...extra,
+  });
+}
+
 /* ── Auth ──────────────────────────────────────────────────── */
 
 function bearer(req: Request): string | null {

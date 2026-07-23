@@ -74,7 +74,9 @@ export function useAuth() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      resolve(session);
+      // Defer: fetchProfile() runs a Supabase query, and running one inside
+      // the auth callback deadlocks (the client holds its auth lock there).
+      setTimeout(() => resolve(session), 0);
     });
 
     return () => {

@@ -10,7 +10,7 @@ import { cn } from "@/lib/cn";
 export interface DayPoint {
   label: string;
   value: number;
-  isToday?: boolean;
+  isCurrent?: boolean;
 }
 
 export function RevenueBars({ days }: { days: DayPoint[] }) {
@@ -18,10 +18,17 @@ export function RevenueBars({ days }: { days: DayPoint[] }) {
   const maxIdx = days.findIndex((d) => d.value === max);
   const empty = days.every((d) => d.value === 0);
 
+  // With many buckets (e.g. 30 daily bars), thin the gaps and x-axis labels
+  // so the chart stays readable instead of turning into a picket fence.
+  const many = days.length > 10;
+  const labelEvery = many ? Math.ceil(days.length / 8) : 1;
+  const gap = many ? "gap-1" : "gap-2 sm:gap-3";
+  const animate = days.length <= 16;
+
   return (
     <div
       role="img"
-      aria-label={`Revenue for the last 7 days: ${days
+      aria-label={`Revenue: ${days
         .map((d) => `${d.label} ${naira(d.value)}`)
         .join(", ")}`}
     >
@@ -36,13 +43,13 @@ export function RevenueBars({ days }: { days: DayPoint[] }) {
 
         {empty ? (
           <div className="absolute inset-0 flex items-center justify-center text-[12.5px] font-semibold text-ink-400">
-            No sales recorded this week yet
+            No sales recorded in this period yet
           </div>
         ) : (
-          <div className="absolute inset-0 flex items-end gap-2 sm:gap-3">
+          <div className={cn("absolute inset-0 flex items-end", gap)}>
             {days.map((d, i) => {
               const h = Math.max((d.value / max) * 100, d.value > 0 ? 4 : 1.5);
-              const showLabel = (i === maxIdx && d.value > 0) || d.isToday;
+              const showLabel = (i === maxIdx && d.value > 0) || d.isCurrent;
               return (
                 <div
                   key={d.label + i}
@@ -53,7 +60,7 @@ export function RevenueBars({ days }: { days: DayPoint[] }) {
                     {d.label} · {naira(d.value)}
                   </span>
                   {/* persistent selective label */}
-                  {showLabel && d.value > 0 && (
+                  {showLabel && d.value > 0 && !many && (
                     <span
                       className="pointer-events-none absolute z-[5] whitespace-nowrap text-[10px] font-bold tabular-nums text-ink-700 group-hover:opacity-0"
                       style={{ bottom: `calc(${h}% + 5px)` }}
@@ -62,17 +69,18 @@ export function RevenueBars({ days }: { days: DayPoint[] }) {
                     </span>
                   )}
                   <motion.div
-                    initial={{ height: 0 }}
+                    initial={animate ? { height: 0 } : false}
                     whileInView={{ height: `${h}%` }}
                     viewport={{ once: true }}
                     transition={{
                       duration: 0.7,
-                      delay: i * 0.05,
+                      delay: animate ? i * 0.05 : 0,
                       ease: [0.22, 1, 0.36, 1],
                     }}
                     className={cn(
-                      "w-full max-w-9 rounded-t-[4px] transition-colors",
-                      d.isToday
+                      "w-full rounded-t-[4px] transition-colors",
+                      !many && "max-w-9",
+                      d.isCurrent
                         ? "bg-[#b80f66]"
                         : "bg-[#d6187c] group-hover:bg-[#b80f66]"
                     )}
@@ -83,16 +91,16 @@ export function RevenueBars({ days }: { days: DayPoint[] }) {
           </div>
         )}
       </div>
-      <div aria-hidden className="mt-2 flex gap-2 sm:gap-3">
+      <div aria-hidden className={cn("mt-2 flex", gap)}>
         {days.map((d, i) => (
           <span
             key={d.label + i}
             className={cn(
-              "flex-1 text-center text-[10.5px] font-semibold",
-              d.isToday ? "text-ink-900" : "text-ink-400"
+              "min-w-0 flex-1 truncate text-center text-[10.5px] font-semibold",
+              d.isCurrent ? "text-ink-900" : "text-ink-400"
             )}
           >
-            {d.label}
+            {i % labelEvery === 0 || d.isCurrent ? d.label : ""}
           </span>
         ))}
       </div>

@@ -41,7 +41,7 @@ export default function FoodImage({
         )}
       >
         <div className="absolute inset-0" style={zoomStyle}>
-          {src.startsWith("data:") ? (
+          {src.startsWith("data:") || src.startsWith("blob:") ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={src}

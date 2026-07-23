@@ -1,19 +1,26 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ChevronRight, ReceiptText } from "lucide-react";
 import CartView from "@/components/cart/CartView";
 import StatusChip from "@/components/StatusChip";
+import Pagination from "@/components/Pagination";
 import { useOrders } from "@/lib/store";
 import { naira, orderRef, timeAgo } from "@/lib/format";
 
+const PER_PAGE = 6;
+
 export default function OrderPage() {
   const orders = useOrders((s) => s.orders);
+  const [page, setPage] = useState(1);
+
+  const mine = useMemo(() => orders.filter((o) => !o.sample), [orders]);
+  const totalPages = Math.max(1, Math.ceil(mine.length / PER_PAGE));
   const myOrders = useMemo(
-    () => orders.filter((o) => !o.sample).slice(0, 12),
-    [orders]
+    () => mine.slice((page - 1) * PER_PAGE, page * PER_PAGE),
+    [mine, page]
   );
 
   return (
@@ -31,7 +38,7 @@ export default function OrderPage() {
         <CartView variant="page" />
       </div>
 
-      {myOrders.length > 0 && (
+      {mine.length > 0 && (
         <section className="mt-10">
           <h2 className="mb-3.5 font-display text-[18px] font-extrabold tracking-tight text-ink-900">
             Recent orders
@@ -74,6 +81,7 @@ export default function OrderPage() {
               </motion.div>
             ))}
           </div>
+          <Pagination page={page} totalPages={totalPages} onPage={setPage} />
         </section>
       )}
     </div>

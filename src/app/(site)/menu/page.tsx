@@ -5,14 +5,18 @@ import { motion } from "framer-motion";
 import { Search, SearchX, X } from "lucide-react";
 import FoodCard from "@/components/food/FoodCard";
 import SiteFooter from "@/components/blocks/SiteFooter";
+import Pagination from "@/components/Pagination";
 import { CATEGORIES, type MenuItem } from "@/lib/data";
 import { useMenu } from "@/lib/store";
 import { cn } from "@/lib/cn";
+
+const RESULTS_PER_PAGE = 8;
 
 export default function MenuPage() {
   const items = useMenu((s) => s.items);
 
   const [query, setQuery] = useState("");
+  const [resultsPage, setResultsPage] = useState(1);
   const [active, setActive] = useState<string>(CATEGORIES[0].id);
   const pillRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const observing = useRef(true);
@@ -37,6 +41,21 @@ export default function MenuPage() {
         i.description?.toLowerCase().includes(q)
     );
   }, [query, items]);
+
+  /* Reset to the first page of results whenever the query changes. */
+  useEffect(() => {
+    setResultsPage(1);
+  }, [query]);
+
+  const resultsTotalPages = results
+    ? Math.max(1, Math.ceil(results.length / RESULTS_PER_PAGE))
+    : 1;
+  const pagedResults = results
+    ? results.slice(
+        (resultsPage - 1) * RESULTS_PER_PAGE,
+        resultsPage * RESULTS_PER_PAGE
+      )
+    : [];
 
   /* Deep-link (#category) support */
   useEffect(() => {
@@ -138,10 +157,17 @@ export default function MenuPage() {
                 {results.length} result{results.length === 1 ? "" : "s"}
               </p>
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                {results.map((item, i) => (
+                {pagedResults.map((item, i) => (
                   <FoodCard key={item.id} item={item} index={i} />
                 ))}
               </div>
+              <Pagination
+                page={resultsPage}
+                totalPages={resultsTotalPages}
+                total={results.length}
+                limit={RESULTS_PER_PAGE}
+                onPage={setResultsPage}
+              />
             </>
           )}
         </section>

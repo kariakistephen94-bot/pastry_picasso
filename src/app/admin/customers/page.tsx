@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Pagination from "@/components/Pagination";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Crown,
@@ -38,6 +39,16 @@ interface CustomerRow {
   segment: Segment;
 }
 
+interface Counts {
+  all: number;
+  new: number;
+  returning: number;
+  vip: number;
+  admins: number;
+}
+
+const PAGE_SIZE = 12;
+
 const SEGMENT_STYLE: Record<Segment, string> = {
   new: "bg-sky-50 text-sky-700",
   returning: "bg-amber-50 text-amber-700",
@@ -56,34 +67,66 @@ export default function AdminCustomers() {
   const showToast = useUI((s) => s.showToast);
 
   const [rows, setRows] = useState<CustomerRow[]>([]);
+  const [counts, setCounts] = useState<Counts>({
+    all: 0,
+    new: 0,
+    returning: 0,
+    vip: 0,
+    admins: 0,
+  });
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { customers, currentUserId } = await api.get<{
-        customers: Omit<CustomerRow, "segment">[];
-        currentUserId: string;
-      }>("/api/admin/customers", { auth: true });
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(t);
+  }, [query]);
 
-      setCurrentUserId(currentUserId ?? null);
-      setRows(
-        customers.map((c) => ({ ...c, segment: segmentFor(c.orderCount) }))
-      );
-    } catch (err) {
-      console.error("Failed to load customers:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (silent = false) => {
+      if (!silent) setLoading(true);
+      try {
+        const res = await api.get<{
+          data: Omit<CustomerRow, "segment">[];
+          total: number;
+          totalPages: number;
+          counts: Counts;
+          currentUserId: string;
+        }>(
+          `/api/admin/customers?page=${page}&limit=${PAGE_SIZE}&filter=${filter}&q=${encodeURIComponent(
+            debouncedQuery
+          )}`,
+          { auth: true }
+        );
+
+        setCurrentUserId(res.currentUserId ?? null);
+        setCounts(res.counts);
+        setTotal(res.total);
+        setTotalPages(res.totalPages);
+        setRows(res.data.map((c) => ({ ...c, segment: segmentFor(c.orderCount) })));
+      } catch (err) {
+        console.error("Failed to load customers:", err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [page, filter, debouncedQuery]
+  );
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter, debouncedQuery]);
 
   // The server is the real gate: it re-checks admin access and refuses to let
   // an admin strip their own role. The UI just makes it convenient.
@@ -116,33 +159,8 @@ export default function AdminCustomers() {
         ? `${row.name} is now an administrator.`
         : `${row.name} is back to a customer account.`
     );
+    load(true);
   };
-
-  const counts = useMemo(
-    () => ({
-      all: rows.length,
-      new: rows.filter((r) => r.segment === "new").length,
-      returning: rows.filter((r) => r.segment === "returning").length,
-      vip: rows.filter((r) => r.segment === "vip").length,
-      admins: rows.filter((r) => r.role === "admin").length,
-    }),
-    [rows]
-  );
-
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return rows.filter((r) => {
-      if (filter === "admins" && r.role !== "admin") return false;
-      if (filter !== "all" && filter !== "admins" && r.segment !== filter)
-        return false;
-      if (!q) return true;
-      return (
-        r.name.toLowerCase().includes(q) ||
-        r.email.toLowerCase().includes(q) ||
-        r.phone.includes(q)
-      );
-    });
-  }, [rows, filter, query]);
 
   const TABS: { id: Filter; label: string }[] = [
     { id: "all", label: "All" },
@@ -230,7 +248,7 @@ export default function AdminCustomers() {
         <p className="animate-pulse pl-1 text-[13px] font-semibold text-ink-400">
           Loading customers...
         </p>
-      ) : shown.length === 0 ? (
+      ) : rows.length === 0 ? (
         <div className="rounded-[24px] bg-white p-8 text-center shadow-soft">
           <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-cream-200 text-ink-400">
             <UserRound className="h-5 w-5" />
@@ -247,7 +265,7 @@ export default function AdminCustomers() {
       ) : (
         <div className="flex flex-col gap-2.5">
           <AnimatePresence initial={false}>
-            {shown.map((r) => {
+            {rows.map((r) => {
               const Icon = SEGMENT_ICON[r.segment];
               const isSelf = r.userId != null && r.userId === currentUserId;
               return (
@@ -355,6 +373,14 @@ export default function AdminCustomers() {
           </AnimatePresence>
         </div>
       )}
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        limit={PAGE_SIZE}
+        onPage={setPage}
+      />
     </div>
   );
 }

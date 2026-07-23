@@ -18,6 +18,20 @@ export async function fileToDataUrl(file: File, maxSize = 900): Promise<string> 
   return canvas.toDataURL("image/jpeg", 0.82);
 }
 
+/**
+ * Read a file as a data-URL with no re-encoding. Last-resort fallback for
+ * previews/persistence when createImageBitmap (used by fileToDataUrl) can't
+ * decode the file.
+ */
+export function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 export function slugify(name: string): string {
   return (
     name

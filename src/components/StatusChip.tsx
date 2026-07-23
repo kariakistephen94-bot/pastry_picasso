@@ -6,6 +6,7 @@ const STYLES: Record<OrderStatus, { label: string; cls: string; dot: string }> =
   preparing: { label: "Preparing", cls: "bg-amber-100 text-amber-800", dot: "bg-amber-500" },
   ready: { label: "Ready", cls: "bg-emerald-100 text-emerald-800", dot: "bg-emerald-500" },
   completed: { label: "Completed", cls: "bg-cream-200 text-ink-500", dot: "bg-ink-400" },
+  cancelled: { label: "Cancelled", cls: "bg-red-100 text-red-700", dot: "bg-red-500" },
 };
 
 export default function StatusChip({ status }: { status: OrderStatus }) {

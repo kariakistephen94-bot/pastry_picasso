@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import type { Session } from "@supabase/supabase-js";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -15,7 +16,7 @@ import {
   UtensilsCrossed,
   LogOut,
 } from "lucide-react";
-import { useOrders } from "@/lib/store";
+import { api } from "@/lib/api";
 import { IMG } from "@/lib/data";
 import { cn } from "@/lib/cn";
 import { supabase } from "@/lib/supabase";
@@ -32,12 +33,19 @@ const NAV = [
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const orders = useOrders((s) => s.orders);
-  
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
+  const [openCount, setOpenCount] = useState(0);
 
-  // Auth monitoring effect
+  // Auth monitoring effect.
+  //
+  // Important: never call a Supabase method (getSession, or a PostgREST query —
+  // which itself calls getSession under the hood) *inside* the
+  // onAuthStateChange callback. supabase-js holds an auth lock for the duration
+  // of that callback, so doing so deadlocks and leaves this screen stuck on
+  // "Verifying Dashboard Access…" forever. We defer all such work with
+  // setTimeout(…, 0) so the lock is released first, and drive the initial
+  // check off the INITIAL_SESSION event rather than a racing getSession().
   useEffect(() => {
     if (pathname === "/admin/login") {
       setCheckingAuth(false);
@@ -46,77 +54,81 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     }
 
     let active = true;
+    let resolved = false;
 
-    async function checkUser() {
+    const finish = (ok: boolean) => {
       if (!active) return;
-      setCheckingAuth(true);
+      resolved = true;
+      setAuthorized(ok);
+      setCheckingAuth(false);
+      if (!ok) router.push("/admin/login");
+    };
 
+    async function verify(session: Session | null) {
+      if (!active) return;
+      if (!session) return finish(false);
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          if (active) {
-            setAuthorized(false);
-            setCheckingAuth(false);
-            router.push("/admin/login");
-          }
-          return;
-        }
-
-        // Authorization comes from the role, not from having a session
-        const { data: profile, error } = await supabase
+        // Authorization comes from the role, not merely from having a session.
+        const { data: profile } = await supabase
           .from("profiles")
           .select("role")
           .eq("id", session.user.id)
-          .single();
-
-        if (error || profile?.role !== "admin") {
-          if (active) {
-            await supabase.auth.signOut();
-            setAuthorized(false);
-            setCheckingAuth(false);
-            router.push("/admin/login");
-          }
-          return;
+          .maybeSingle();
+        if (!active) return;
+        if (profile?.role === "admin") {
+          finish(true);
+        } else {
+          await supabase.auth.signOut();
+          finish(false);
         }
-
-        if (active) {
-          setAuthorized(true);
-          setCheckingAuth(false);
-        }
-      } catch (err) {
-        if (active) {
-          setAuthorized(false);
-          setCheckingAuth(false);
-          router.push("/admin/login");
-        }
+      } catch {
+        finish(false);
       }
     }
 
-    checkUser();
-
-    // Listen to changes in auth state (e.g. if password/user deleted or signout from console)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === "SIGNED_OUT") {
-          if (active) {
-            setAuthorized(false);
-            router.push("/admin/login");
-          }
-        } else if (event === "SIGNED_IN" && session) {
-          checkUser();
-        }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        finish(false);
+      } else {
+        // INITIAL_SESSION (initial check), SIGNED_IN, TOKEN_REFRESHED, etc.
+        // Deferred so we don't query Supabase while the auth lock is held.
+        setTimeout(() => verify(session), 0);
       }
-    );
+    });
+
+    // Safety net: if anything stalls, don't leave the admin staring at the
+    // spinner. After 10s, bail to the login screen.
+    const watchdog = setTimeout(() => {
+      if (active && !resolved) finish(false);
+    }, 10_000);
 
     return () => {
       active = false;
+      clearTimeout(watchdog);
       subscription.unsubscribe();
     };
   }, [pathname, router]);
 
-  const openCount = orders.filter(
-    (o) => o.status === "new" || o.status === "preparing"
-  ).length;
+  // Pending-orders badge. Refetched whenever the admin changes pages, so it
+  // stays roughly in step as orders move through the kitchen.
+  useEffect(() => {
+    if (!authorized || pathname === "/admin/login") return;
+    let active = true;
+    api
+      .get<{ counts: Record<string, number> }>(
+        "/api/admin/orders?countsOnly=1",
+        { auth: true }
+      )
+      .then(({ counts }) => {
+        if (active) setOpenCount((counts.new ?? 0) + (counts.preparing ?? 0));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [authorized, pathname]);
 
   // Render bypass if we are on the login page
   if (pathname === "/admin/login") {

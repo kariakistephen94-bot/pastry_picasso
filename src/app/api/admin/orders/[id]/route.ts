@@ -3,7 +3,7 @@ import { admin, ok, fail, guard, requireAdmin } from "@/lib/api-server";
 
 export const dynamic = "force-dynamic";
 
-const STATUSES = ["new", "preparing", "ready", "completed"];
+const STATUSES = ["new", "preparing", "ready", "completed", "cancelled"];
 
 /** Update an order's status and/or payment verification. Admin only. */
 export async function PATCH(

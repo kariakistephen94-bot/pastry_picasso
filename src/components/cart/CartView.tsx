@@ -98,17 +98,34 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
 
       notifyOrderByEmail(order);
 
-      clear();
-      setNote("");
-      setStep("cart");
-      setAttested(false);
-      setSubmitting(false);
+      // Navigate first, then clear. `submitting` stays true so the "Placing
+      // your order" screen (below) covers the transition — we never flash the
+      // empty-cart state on the way to the confirmation page.
       router.push(`/order/placed?id=${orderRef(order.id)}`);
+      setNote("");
+      clear();
     } catch (e: any) {
       setError(e?.message || "Failed to place order. Please try again.");
       setSubmitting(false);
     }
   };
+
+  /* ── Placing / redirecting ─────────────────────────────────── */
+  // Shown from the moment we submit until the confirmation page takes over,
+  // so the cart never appears to "empty out" in front of the customer.
+  if (submitting) {
+    return (
+      <div className="flex flex-col items-center px-6 py-16 text-center">
+        <span className="h-12 w-12 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+        <p className="mt-4 text-[14px] font-bold text-ink-900">
+          Placing your order…
+        </p>
+        <p className="mt-1 text-[12.5px] font-medium text-ink-500">
+          Hang tight, taking you to your receipt.
+        </p>
+      </div>
+    );
+  }
 
   /* ── Empty state ───────────────────────────────────────────── */
   if (lines.length === 0) {
