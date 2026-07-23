@@ -11,11 +11,10 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons";
-import { useOrders } from "@/lib/store";
 import { downloadReceipt } from "@/lib/receipt";
 import { whatsappOrderUrlFromOrder } from "@/lib/whatsapp";
 import { normalizeTrackingInput, orderRef } from "@/lib/format";
-import { supabase } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { Order } from "@/lib/store";
 
 export default function OrderPlacedPage() {
@@ -36,38 +35,12 @@ export default function OrderPlacedPage() {
 
       const fetchOrder = async () => {
         try {
-          const { data, error } = await supabase
-            .from("orders")
-            .select("*, order_items(*)")
-            .ilike("id", `%${suffix}`);
-
-          if (data && data.length > 0) {
-            const matched = data.find(
-              (o) => normalizeTrackingInput(o.id) === suffix
-            );
-            if (matched) {
-              setOrder({
-                id: matched.id,
-                customerName: matched.customer_name,
-                phone: matched.phone || undefined,
-                method: matched.method,
-                address: matched.address || undefined,
-                note: matched.note || undefined,
-                total: matched.total,
-                status: matched.status,
-                createdAt: parseInt(matched.created_at),
-                paymentConfirmed: matched.payment_confirmed,
-                paymentVerified: matched.payment_verified,
-                lines: matched.order_items.map((li: any) => ({
-                  name: li.name,
-                  qty: li.qty,
-                  price: li.price,
-                })),
-              });
-            }
-          }
+          const { order } = await api.get<{ order: Order }>(
+            `/api/orders/${suffix}`
+          );
+          setOrder(order);
         } catch (err) {
-          console.error("Error fetching order from Supabase:", err);
+          console.error("Error fetching order:", err);
         } finally {
           setLoading(false);
         }

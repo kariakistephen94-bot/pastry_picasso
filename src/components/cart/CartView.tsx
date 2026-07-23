@@ -84,33 +84,26 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
       console.error("Failed to save profile during checkout:", e);
     }
 
-    const orderLines = lines.map((l) => ({
-      name: l.name,
-      qty: l.qty,
-      price: l.price,
-    }));
-
     try {
-      const id = await placeOrder({
+      const order = await placeOrder({
         customerName: profile.name.trim(),
         phone: profile.phone.trim() || undefined,
         method,
         address: method === "delivery" ? profile.address.trim() : undefined,
         note: note.trim() || undefined,
-        lines: orderLines,
-        total,
+        items: lines.map((l) => ({ id: l.id, name: l.name, qty: l.qty })),
         paymentConfirmed: true,
-      }, profile.id);
+        customerId: profile.id || undefined,
+      });
 
-      const order = useOrders.getState().orders.find((o) => o.id === id);
-      if (order) notifyOrderByEmail(order);
+      notifyOrderByEmail(order);
 
       clear();
       setNote("");
       setStep("cart");
       setAttested(false);
       setSubmitting(false);
-      router.push(`/order/placed?id=${orderRef(id)}`);
+      router.push(`/order/placed?id=${orderRef(order.id)}`);
     } catch (e: any) {
       setError(e?.message || "Failed to place order. Please try again.");
       setSubmitting(false);

@@ -19,7 +19,7 @@ import { BUSINESS } from "@/lib/data";
 import { useOrders, useSettings } from "@/lib/store";
 import { useUI } from "@/lib/ui-store";
 import { cn } from "@/lib/cn";
-import { supabase } from "@/lib/supabase";
+import { api } from "@/lib/api";
 
 const field =
   "w-full rounded-2xl bg-cream-100 px-4 py-3 text-[13.5px] font-medium text-ink-900 placeholder:text-ink-300 outline-none ring-1 ring-transparent transition focus:bg-white focus:ring-2 focus:ring-brand-300";
@@ -55,12 +55,18 @@ export default function AdminSettings() {
     const load = async () => {
       try {
         setLoadingAdmins(true);
-        const { data } = await supabase
-          .from("profiles")
-          .select("id, email")
-          .eq("role", "admin")
-          .order("email");
-        if (data) setAdmins(data);
+        const { customers, currentUserId } = await api.get<{
+          customers: { userId: string | null; email: string; role: string | null }[];
+          currentUserId: string;
+        }>("/api/admin/customers", { auth: true });
+
+        setCurrentUserId(currentUserId ?? null);
+        setAdmins(
+          customers
+            .filter((c) => c.role === "admin" && c.userId)
+            .map((c) => ({ id: c.userId as string, email: c.email }))
+            .sort((a, b) => a.email.localeCompare(b.email))
+        );
       } catch (err) {
         console.error(err);
       } finally {
@@ -68,14 +74,6 @@ export default function AdminSettings() {
       }
     };
     load();
-
-    const checkCurrentUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setCurrentUserId(session.user.id);
-      }
-    };
-    checkCurrentUser();
   }, []);
 
   const sampleCount = orders.filter((o) => o.sample).length;

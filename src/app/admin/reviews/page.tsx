@@ -17,7 +17,7 @@ export default function AdminReviews() {
   const showToast = useUI((s) => s.showToast);
 
   useEffect(() => {
-    fetchReviews();
+    fetchReviews(true);
   }, [fetchReviews]);
 
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);

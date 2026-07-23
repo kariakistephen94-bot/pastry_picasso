@@ -37,7 +37,7 @@ export default function ReviewPage() {
     }
     setError(null);
     const review = { name: name.trim(), rating, text: text.trim() };
-    addReview({ ...review, source: "Website", visible: false });
+    addReview(review);
     notifyReviewByEmail(review);
     setSent(true);
   };

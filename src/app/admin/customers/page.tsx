@@ -13,7 +13,7 @@ import {
   Sparkles,
   UserRound,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { useUI } from "@/lib/ui-store";
 import { naira, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -36,12 +36,6 @@ interface CustomerRow {
   totalSpend: number;
   lastOrderAt: number | null;
   segment: Segment;
-}
-
-/** Last 10 digits, so 0803..., +234803... and 234803... group together. */
-function phoneKey(phone?: string | null): string {
-  const digits = (phone || "").replace(/\D/g, "");
-  return digits.length > 10 ? digits.slice(-10) : digits;
 }
 
 const SEGMENT_STYLE: Record<Segment, string> = {
@@ -71,88 +65,15 @@ export default function AdminCustomers() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: profiles }, { data: orders }] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, email, full_name, phone, role")
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("orders")
-          .select("user_id, customer_name, phone, total, created_at"),
-      ]);
+      const { customers, currentUserId } = await api.get<{
+        customers: Omit<CustomerRow, "segment">[];
+        currentUserId: string;
+      }>("/api/admin/customers", { auth: true });
 
-      const orderList = orders ?? [];
-
-      // Registered accounts. An order counts as theirs if it carries their
-      // user_id, or if it was placed as a guest from the same phone number.
-      const registered: CustomerRow[] = (profiles ?? []).map((p: any) => {
-        const pKey = phoneKey(p.phone);
-        const mine = orderList.filter(
-          (o: any) =>
-            o.user_id === p.id || (pKey !== "" && phoneKey(o.phone) === pKey)
-        );
-        const orderCount = mine.length;
-        return {
-          key: `user:${p.id}`,
-          userId: p.id,
-          name: p.full_name || p.email || "Unnamed",
-          email: p.email || "",
-          phone: p.phone || "",
-          role: p.role === "admin" ? "admin" : "customer",
-          orderCount,
-          totalSpend: mine.reduce((n: number, o: any) => n + (o.total || 0), 0),
-          lastOrderAt: mine.length
-            ? Math.max(...mine.map((o: any) => Number(o.created_at)))
-            : null,
-          segment: segmentFor(orderCount),
-        };
-      });
-
-      const claimedPhones = new Set(
-        registered.map((r) => phoneKey(r.phone)).filter(Boolean)
+      setCurrentUserId(currentUserId ?? null);
+      setRows(
+        customers.map((c) => ({ ...c, segment: segmentFor(c.orderCount) }))
       );
-
-      // Guests: no account, grouped by phone (or by name when there is none).
-      const guests = new Map<string, CustomerRow>();
-      for (const o of orderList as any[]) {
-        if (o.user_id) continue;
-        const pKey = phoneKey(o.phone);
-        if (pKey && claimedPhones.has(pKey)) continue;
-
-        const key = pKey ? `phone:${pKey}` : `name:${o.customer_name || "?"}`;
-        const at = Number(o.created_at);
-        const existing = guests.get(key);
-
-        if (existing) {
-          existing.orderCount += 1;
-          existing.totalSpend += o.total || 0;
-          existing.segment = segmentFor(existing.orderCount);
-          if (!existing.lastOrderAt || at > existing.lastOrderAt) {
-            existing.lastOrderAt = at;
-            existing.name = o.customer_name || existing.name;
-          }
-        } else {
-          guests.set(key, {
-            key,
-            userId: null,
-            name: o.customer_name || "Guest",
-            email: "",
-            phone: o.phone || "",
-            role: null,
-            orderCount: 1,
-            totalSpend: o.total || 0,
-            lastOrderAt: at,
-            segment: segmentFor(1),
-          });
-        }
-      }
-
-      const all = [...registered, ...guests.values()].sort((a, b) => {
-        if (b.orderCount !== a.orderCount) return b.orderCount - a.orderCount;
-        return (b.lastOrderAt ?? 0) - (a.lastOrderAt ?? 0);
-      });
-
-      setRows(all);
     } catch (err) {
       console.error("Failed to load customers:", err);
     } finally {
@@ -162,13 +83,10 @@ export default function AdminCustomers() {
 
   useEffect(() => {
     load();
-    supabase.auth.getSession().then(({ data }) => {
-      setCurrentUserId(data.session?.user.id ?? null);
-    });
   }, [load]);
 
-  // The database is the real gate here: RLS plus a trigger reject this update
-  // unless the caller is already an admin. The UI just makes it convenient.
+  // The server is the real gate: it re-checks admin access and refuses to let
+  // an admin strip their own role. The UI just makes it convenient.
   const setRole = async (row: CustomerRow, role: Role) => {
     if (!row.userId || busyId) return;
     if (row.userId === currentUserId && role === "customer") {
@@ -177,16 +95,18 @@ export default function AdminCustomers() {
     }
 
     setBusyId(row.userId);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role })
-      .eq("id", row.userId);
-    setBusyId(null);
-
-    if (error) {
-      showToast(error.message);
+    try {
+      await api.patch(
+        `/api/admin/customers/${row.userId}`,
+        { role },
+        { auth: true }
+      );
+    } catch (err: any) {
+      setBusyId(null);
+      showToast(err?.message || "Failed to update role.");
       return;
     }
+    setBusyId(null);
 
     setRows((prev) =>
       prev.map((r) => (r.userId === row.userId ? { ...r, role } : r))

@@ -10,6 +10,7 @@ import TrustBadges from "@/components/home/TrustBadges";
 import SectionHeader from "@/components/SectionHeader";
 import CategoryCard from "@/components/food/CategoryCard";
 import FeatureCard from "@/components/food/FeatureCard";
+import FoodCard from "@/components/food/FoodCard";
 import ContactBlock from "@/components/blocks/ContactBlock";
 import PaymentBlock from "@/components/blocks/PaymentBlock";
 import ReviewsBlock from "@/components/blocks/ReviewsBlock";
@@ -20,10 +21,27 @@ import { useMenu } from "@/lib/store";
 export default function HomePage() {
   const items = useMenu((s) => s.items);
 
+  /* Featured strip is capped at 5, no matter how many are flagged. */
+  const FEATURED_LIMIT = 5;
+  const HOME_MENU_LIMIT = 10;
+
   const featured = useMemo(
-    () => items.filter((i) => i.featured && i.available !== false),
+    () =>
+      items
+        .filter((i) => i.featured && i.available !== false)
+        .slice(0, FEATURED_LIMIT),
     [items]
   );
+
+  /* The home menu preview carries the rest of the menu across every
+     category, minus whatever is already on show in the featured strip. */
+  const homeMenu = useMemo(() => {
+    const featuredIds = new Set(featured.map((i) => i.id));
+    return items
+      .filter((i) => i.available !== false && !featuredIds.has(i.id))
+      .slice(0, HOME_MENU_LIMIT);
+  }, [items, featured]);
+
   /* Only categories that actually have dishes show on the site. */
   const activeCategories = useMemo(
     () =>
@@ -163,6 +181,22 @@ export default function HomePage() {
             ))}
           </div>
         </section>
+
+        {/* ── From the menu ───────────────────────────────────── */}
+        {homeMenu.length > 0 && (
+          <section>
+            <SectionHeader
+              title="From the menu"
+              sub="Fresh picks across every category"
+              action={{ href: "/menu", label: "Full menu" }}
+            />
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              {homeMenu.map((item, i) => (
+                <FoodCard key={item.id} item={item} index={i} />
+              ))}
+            </div>
+          </section>
+        )}
 
         <ReviewsBlock />
 

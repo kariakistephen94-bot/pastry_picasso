@@ -17,7 +17,7 @@ import { downloadReceipt } from "@/lib/receipt";
 import { whatsappChatUrl } from "@/lib/whatsapp";
 import { naira, normalizeTrackingInput, orderRef, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import { supabase } from "@/lib/supabase";
+import { api } from "@/lib/api";
 
 function buildSteps(order: Order) {
   const s = order.status;
@@ -79,35 +79,10 @@ export default function TrackPage() {
         return;
       }
       try {
-        const { data, error } = await supabase
-          .from("orders")
-          .select("*, order_items(*)")
-          .eq("customer_id", profile.id)
-          .order("created_at", { ascending: false })
-          .limit(8);
-
-        if (data) {
-          setMyOrders(
-            data.map((o: any) => ({
-              id: o.id,
-              customerName: o.customer_name,
-              phone: o.phone || undefined,
-              method: o.method,
-              address: o.address || undefined,
-              note: o.note || undefined,
-              total: o.total,
-              status: o.status,
-              createdAt: parseInt(o.created_at),
-              paymentConfirmed: o.payment_confirmed,
-              paymentVerified: o.payment_verified,
-              lines: o.order_items.map((li: any) => ({
-                name: li.name,
-                qty: li.qty,
-                price: li.price,
-              })),
-            }))
-          );
-        }
+        const { orders } = await api.get<{ orders: Order[] }>(
+          `/api/customers/${profile.id}/orders`
+        );
+        setMyOrders(orders);
       } catch (err) {
         console.error("Failed to load past orders:", err);
       } finally {
@@ -127,47 +102,11 @@ export default function TrackPage() {
     setNotFound(false);
 
     try {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("*, order_items(*)")
-        .ilike("id", `%${suffix}`);
-
-      if (data && data.length > 0) {
-        const matched = data.find(
-          (o) => normalizeTrackingInput(o.id) === suffix
-        );
-        if (matched) {
-          const ord: Order = {
-            id: matched.id,
-            customerName: matched.customer_name,
-            phone: matched.phone || undefined,
-            method: matched.method,
-            address: matched.address || undefined,
-            note: matched.note || undefined,
-            total: matched.total,
-            status: matched.status,
-            createdAt: parseInt(matched.created_at),
-            paymentConfirmed: matched.payment_confirmed,
-            paymentVerified: matched.payment_verified,
-            lines: matched.order_items.map((li: any) => ({
-              name: li.name,
-              qty: li.qty,
-              price: li.price,
-            })),
-          };
-          setActiveOrder(ord);
-          setNotFound(false);
-          setQuery(orderRef(matched.id));
-        } else {
-          setActiveOrder(null);
-          setNotFound(true);
-        }
-      } else {
-        setActiveOrder(null);
-        setNotFound(true);
-      }
-    } catch (err) {
-      console.error("Failed to lookup order:", err);
+      const { order } = await api.get<{ order: Order }>(`/api/orders/${suffix}`);
+      setActiveOrder(order);
+      setNotFound(false);
+      setQuery(orderRef(order.id));
+    } catch {
       setActiveOrder(null);
       setNotFound(true);
     } finally {
