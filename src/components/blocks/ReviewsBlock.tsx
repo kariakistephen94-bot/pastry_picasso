@@ -54,17 +54,12 @@ export default function ReviewsBlock() {
             <blockquote className="mt-3 flex-1 text-[13px] leading-relaxed text-ink-700">
               “{r.text}”
             </blockquote>
-            <figcaption className="mt-4 flex items-center gap-2.5">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-[13px] font-extrabold text-white">
-                {r.name.charAt(0).toUpperCase()}
+            <figcaption className="mt-4 min-w-0">
+              <span className="block truncate text-[12.5px] font-bold text-ink-900">
+                {r.name}
               </span>
-              <span className="min-w-0">
-                <span className="block truncate text-[12.5px] font-bold text-ink-900">
-                  {r.name}
-                </span>
-                <span className="block text-[11px] font-semibold text-ink-400">
-                  via {r.source} · {timeAgo(r.date)}
-                </span>
+              <span className="block text-[11px] font-semibold text-ink-400">
+                via {r.source} · {timeAgo(r.date)}
               </span>
             </figcaption>
           </motion.figure>

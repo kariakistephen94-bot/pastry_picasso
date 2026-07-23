@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ImagePlus,
@@ -20,6 +20,7 @@ import { useLockBody } from "@/lib/hooks";
 import { fileToDataUrl, slugify } from "@/lib/image";
 import { naira } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { supabase } from "@/lib/supabase";
 
 const ALL_CATS = CATEGORIES.map((c) => ({ id: c.id as string, label: c.label }));
 
@@ -28,11 +29,16 @@ const field =
 
 export default function AdminMenu() {
   const items = useMenu((s) => s.items);
+  const fetchItems = useMenu((s) => s.fetchItems);
   const upsert = useMenu((s) => s.upsert);
   const remove = useMenu((s) => s.remove);
   const toggleAvailable = useMenu((s) => s.toggleAvailable);
   const resetMenu = useMenu((s) => s.resetMenu);
   const showToast = useUI((s) => s.showToast);
+
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
 
   const [query, setQuery] = useState("");
   const [cat, setCat] = useState<string>("all");
@@ -310,10 +316,29 @@ function MenuEditor({
   const pickImage = async (file: File | undefined) => {
     if (!file) return;
     setUploading(true);
+    setError(null);
     try {
-      setImage(await fileToDataUrl(file));
-    } catch {
-      setError("Could not read that image. Try a JPG or PNG.");
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${fileExt}`;
+      const filePath = `menu/${fileName}`;
+
+      const { data, error: uploadError } = await supabase.storage
+        .from("menu-images")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("menu-images")
+        .getPublicUrl(filePath);
+
+      setImage(publicUrl);
+    } catch (err: any) {
+      setError(err?.message || "Could not upload image. Try again.");
+      console.error("Storage upload error:", err);
     } finally {
       setUploading(false);
     }

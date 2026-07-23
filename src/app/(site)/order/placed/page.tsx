@@ -15,25 +15,69 @@ import { useOrders } from "@/lib/store";
 import { downloadReceipt } from "@/lib/receipt";
 import { whatsappOrderUrlFromOrder } from "@/lib/whatsapp";
 import { normalizeTrackingInput, orderRef } from "@/lib/format";
+import { supabase } from "@/lib/supabase";
+import { Order } from "@/lib/store";
 
 export default function OrderPlacedPage() {
-  const orders = useOrders((s) => s.orders);
   const [refParam, setRefParam] = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search).get("id");
-    if (p) setRefParam(p);
-  }, []);
+    if (p) {
+      setRefParam(p);
+      const suffix = normalizeTrackingInput(p);
+      if (!suffix) {
+        setLoading(false);
+        return;
+      }
 
-  const order = useMemo(() => {
-    const suffix = normalizeTrackingInput(refParam);
-    if (!suffix) return null;
-    return (
-      orders.find((o) => !o.sample && o.id.toUpperCase().endsWith(suffix)) ??
-      null
-    );
-  }, [orders, refParam]);
+      const fetchOrder = async () => {
+        try {
+          const { data, error } = await supabase
+            .from("orders")
+            .select("*, order_items(*)")
+            .ilike("id", `%${suffix}`);
+
+          if (data && data.length > 0) {
+            const matched = data.find(
+              (o) => normalizeTrackingInput(o.id) === suffix
+            );
+            if (matched) {
+              setOrder({
+                id: matched.id,
+                customerName: matched.customer_name,
+                phone: matched.phone || undefined,
+                method: matched.method,
+                address: matched.address || undefined,
+                note: matched.note || undefined,
+                total: matched.total,
+                status: matched.status,
+                createdAt: parseInt(matched.created_at),
+                paymentConfirmed: matched.payment_confirmed,
+                paymentVerified: matched.payment_verified,
+                lines: matched.order_items.map((li: any) => ({
+                  name: li.name,
+                  qty: li.qty,
+                  price: li.price,
+                })),
+              });
+            }
+          }
+        } catch (err) {
+          console.error("Error fetching order from Supabase:", err);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchOrder();
+    } else {
+      setLoading(false);
+    }
+  }, []);
 
   const handleDownload = async () => {
     if (!order || downloading) return;
@@ -44,6 +88,17 @@ export default function OrderPlacedPage() {
       setDownloading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="mx-auto flex max-w-[480px] flex-col items-center px-6 py-20 text-center">
+        <span className="flex h-10 w-10 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+        <p className="mt-4 text-[13px] font-semibold text-ink-500">
+          Loading order details...
+        </p>
+      </div>
+    );
+  }
 
   if (!order) {
     return (

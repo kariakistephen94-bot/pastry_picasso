@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Banknote,
@@ -36,7 +36,12 @@ const NEXT: Partial<Record<OrderStatus, { to: OrderStatus; label: string }>> = {
 
 export default function AdminOrders() {
   const orders = useOrders((s) => s.orders);
+  const fetchOrders = useOrders((s) => s.fetchOrders);
   const setStatus = useOrders((s) => s.setStatus);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
   const [filter, setFilter] = useState<OrderStatus | "all">("all");
   const [detailsId, setDetailsId] = useState<string | null>(null);
 

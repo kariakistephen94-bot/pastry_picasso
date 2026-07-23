@@ -7,6 +7,7 @@ import {
   Clock,
   FileDown,
   LayoutDashboard,
+  LogOut,
   MapPin,
   PackageSearch,
   Phone,
@@ -17,6 +18,7 @@ import { WhatsAppIcon } from "@/components/icons";
 import StatusChip from "@/components/StatusChip";
 import PaymentBlock from "@/components/blocks/PaymentBlock";
 import { BUSINESS } from "@/lib/data";
+import { useAuth } from "@/lib/auth";
 import { useOrders, useSettings } from "@/lib/store";
 import { downloadReceipt } from "@/lib/receipt";
 import { naira, orderRef, timeAgo } from "@/lib/format";
@@ -30,6 +32,7 @@ export default function AccountPage() {
   const setProfile = useSettings((s) => s.setProfile);
   const business = useSettings((s) => s.business);
   const orders = useOrders((s) => s.orders);
+  const { loading: authLoading, session, profile: account, isAdmin, signOut } = useAuth();
 
   const myOrders = useMemo(
     () => orders.filter((o) => !o.sample).slice(0, 5),
@@ -48,6 +51,70 @@ export default function AccountPage() {
           Your details make checkout one tap faster.
         </p>
       </header>
+
+      {/* Sign in state */}
+      {!authLoading &&
+        (session ? (
+          <section className="mt-5 rounded-[26px] bg-white p-5 shadow-soft">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="truncate font-display text-[14.5px] font-extrabold text-ink-900">
+                    {account?.email || session.user.email}
+                  </p>
+                  {isAdmin && (
+                    <span className="shrink-0 rounded-full bg-ink-900 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                      Admin
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-[12px] font-medium text-ink-500">
+                  Signed in
+                </p>
+              </div>
+              <button
+                onClick={signOut}
+                className="flex shrink-0 items-center gap-1.5 rounded-2xl bg-red-50 px-3.5 py-2.5 text-[12px] font-bold text-red-600 transition-colors hover:bg-red-100 cursor-pointer"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Sign out
+              </button>
+            </div>
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="mt-3 flex h-11 items-center justify-center gap-2 rounded-2xl bg-ink-900 text-[13px] font-bold text-white"
+              >
+                <LayoutDashboard className="h-4 w-4" />
+                Open dashboard
+              </Link>
+            )}
+          </section>
+        ) : (
+          <section className="mt-5 rounded-[26px] bg-white p-5 shadow-soft">
+            <p className="font-display text-[15px] font-extrabold text-ink-900">
+              Create an account
+            </p>
+            <p className="mt-1 text-[12.5px] font-medium leading-relaxed text-ink-500">
+              Keep your orders in one place across every device. You can still
+              order as a guest.
+            </p>
+            <div className="mt-4 flex gap-2.5">
+              <Link
+                href="/signup"
+                className="flex h-11 flex-1 items-center justify-center rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 text-[13px] font-bold text-white shadow-pink"
+              >
+                Sign up
+              </Link>
+              <Link
+                href="/login"
+                className="flex h-11 flex-1 items-center justify-center rounded-2xl bg-cream-100 text-[13px] font-bold text-ink-700"
+              >
+                Sign in
+              </Link>
+            </div>
+          </section>
+        ))}
 
       {/* Profile */}
       <section className="mt-5 rounded-[26px] bg-white p-5 shadow-soft">

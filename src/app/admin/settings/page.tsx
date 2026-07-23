@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Building2,
   Clock,
@@ -11,18 +12,21 @@ import {
   Save,
   Timer,
   Trash2,
+  ShieldCheck,
 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons";
 import { BUSINESS } from "@/lib/data";
 import { useOrders, useSettings } from "@/lib/store";
 import { useUI } from "@/lib/ui-store";
 import { cn } from "@/lib/cn";
+import { supabase } from "@/lib/supabase";
 
 const field =
   "w-full rounded-2xl bg-cream-100 px-4 py-3 text-[13.5px] font-medium text-ink-900 placeholder:text-ink-300 outline-none ring-1 ring-transparent transition focus:bg-white focus:ring-2 focus:ring-brand-300";
 
 export default function AdminSettings() {
   const business = useSettings((s) => s.business);
+  const fetchBusiness = useSettings((s) => s.fetchBusiness);
   const setBusiness = useSettings((s) => s.setBusiness);
   const resetBusiness = useSettings((s) => s.resetBusiness);
   const clearSamples = useOrders((s) => s.clearSamples);
@@ -31,7 +35,48 @@ export default function AdminSettings() {
   const showToast = useUI((s) => s.showToast);
 
   const [form, setForm] = useState(business);
+
+  useEffect(() => {
+    fetchBusiness();
+  }, [fetchBusiness]);
+
+  useEffect(() => {
+    setForm(business);
+  }, [business]);
+
   const [confirmClear, setConfirmClear] = useState(false);
+
+  // Read-only roster. Roles are changed on the Customers page.
+  const [admins, setAdmins] = useState<{ id: string; email: string }[]>([]);
+  const [loadingAdmins, setLoadingAdmins] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoadingAdmins(true);
+        const { data } = await supabase
+          .from("profiles")
+          .select("id, email")
+          .eq("role", "admin")
+          .order("email");
+        if (data) setAdmins(data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingAdmins(false);
+      }
+    };
+    load();
+
+    const checkCurrentUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setCurrentUserId(session.user.id);
+      }
+    };
+    checkCurrentUser();
+  }, []);
 
   const sampleCount = orders.filter((o) => o.sample).length;
 
@@ -149,6 +194,49 @@ export default function AdminSettings() {
           >
             <Save className="h-4 w-4" /> Save changes
           </button>
+        </div>
+      </section>
+
+      {/* Administrators */}
+      <section className="mt-4 rounded-[24px] bg-white p-5 shadow-soft">
+        <div className="mb-4 flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+            <ShieldCheck className="h-[18px] w-[18px]" />
+          </span>
+          <div>
+            <h2 className="font-display text-[15px] font-extrabold text-ink-900">
+              Administrators
+            </h2>
+            <p className="text-[12px] font-medium text-ink-500">
+              Everyone with dashboard access.
+            </p>
+          </div>
+          <Link
+            href="/admin/customers"
+            className="ml-auto shrink-0 rounded-2xl bg-cream-100 px-3.5 py-2 text-[12px] font-bold text-ink-700 transition-colors hover:bg-cream-200"
+          >
+            Manage roles
+          </Link>
+        </div>
+
+        {/* Admin List */}
+        <div className="flex flex-col gap-2">
+          {loadingAdmins ? (
+            <p className="text-[12.5px] text-ink-400 pl-1 animate-pulse">Loading administrators...</p>
+          ) : admins.length === 0 ? (
+            <p className="text-[12.5px] text-ink-400 pl-1">No administrators registered.</p>
+          ) : (
+            admins.map((adm) => (
+              <div
+                key={adm.id}
+                className="flex items-center justify-between gap-3 rounded-2xl bg-cream-100/60 p-3"
+              >
+                <span className="truncate text-[13px] font-semibold text-ink-900 pl-1">
+                  {adm.email} {adm.id === currentUserId && <span className="text-[10px] bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full ml-1 font-bold">You</span>}
+                </span>
+              </div>
+            ))
+          )}
         </div>
       </section>
 

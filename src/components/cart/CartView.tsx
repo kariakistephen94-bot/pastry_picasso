@@ -35,12 +35,14 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
   const placeOrder = useOrders((s) => s.place);
   const profile = useSettings((s) => s.profile);
   const setProfile = useSettings((s) => s.setProfile);
+  const saveProfile = useSettings((s) => s.saveProfile);
 
   const [step, setStep] = useState<"cart" | "payment">("cart");
   const [method, setMethod] = useState<"pickup" | "delivery">("delivery");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [attested, setAttested] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const total = cartTotal(lines);
 
@@ -66,32 +68,53 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
     setStep("payment");
   };
 
-  const submitOrder = () => {
-    if (!attested) return;
+  const submitOrder = async () => {
+    if (!attested || submitting) return;
+    setSubmitting(true);
+    setError(null);
+
+    // Save profile details to public.customers first
+    try {
+      await saveProfile({
+        name: profile.name.trim(),
+        phone: profile.phone.trim(),
+        address: method === "delivery" ? profile.address.trim() : profile.address,
+      });
+    } catch (e) {
+      console.error("Failed to save profile during checkout:", e);
+    }
+
     const orderLines = lines.map((l) => ({
       name: l.name,
       qty: l.qty,
       price: l.price,
     }));
-    const id = placeOrder({
-      customerName: profile.name.trim(),
-      phone: profile.phone.trim() || undefined,
-      method,
-      address: method === "delivery" ? profile.address.trim() : undefined,
-      note: note.trim() || undefined,
-      lines: orderLines,
-      total,
-      paymentConfirmed: true,
-    });
 
-    const order = useOrders.getState().orders.find((o) => o.id === id);
-    if (order) notifyOrderByEmail(order);
+    try {
+      const id = await placeOrder({
+        customerName: profile.name.trim(),
+        phone: profile.phone.trim() || undefined,
+        method,
+        address: method === "delivery" ? profile.address.trim() : undefined,
+        note: note.trim() || undefined,
+        lines: orderLines,
+        total,
+        paymentConfirmed: true,
+      }, profile.id);
 
-    clear();
-    setNote("");
-    setStep("cart");
-    setAttested(false);
-    router.push(`/order/placed?id=${orderRef(id)}`);
+      const order = useOrders.getState().orders.find((o) => o.id === id);
+      if (order) notifyOrderByEmail(order);
+
+      clear();
+      setNote("");
+      setStep("cart");
+      setAttested(false);
+      setSubmitting(false);
+      router.push(`/order/placed?id=${orderRef(id)}`);
+    } catch (e: any) {
+      setError(e?.message || "Failed to place order. Please try again.");
+      setSubmitting(false);
+    }
   };
 
   /* ── Empty state ───────────────────────────────────────────── */
@@ -199,10 +222,11 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
                 type="button"
                 whileTap={{ scale: 0.97 }}
                 onClick={submitOrder}
-                className="mt-3.5 flex h-[52px] w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 text-[15px] font-bold text-white shadow-pink transition-shadow hover:shadow-pink-lg"
+                disabled={submitting}
+                className="mt-3.5 flex h-[52px] w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 text-[15px] font-bold text-white shadow-pink transition-shadow hover:shadow-pink-lg disabled:opacity-50"
               >
-                Submit order
-                <ArrowRight className="h-5 w-5" />
+                {submitting ? "Submitting order..." : "Submit order"}
+                {!submitting && <ArrowRight className="h-5 w-5" />}
               </motion.button>
             </motion.div>
           )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Copy, Eye, EyeOff, Link2, Trash2 } from "lucide-react";
 import { Stars } from "@/components/blocks/ReviewsBlock";
@@ -11,9 +11,14 @@ import { cn } from "@/lib/cn";
 
 export default function AdminReviews() {
   const reviews = useReviews((s) => s.reviews);
+  const fetchReviews = useReviews((s) => s.fetchReviews);
   const toggleVisible = useReviews((s) => s.toggleVisible);
   const removeReview = useReviews((s) => s.removeReview);
   const showToast = useUI((s) => s.showToast);
+
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
 
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
@@ -90,9 +95,6 @@ export default function AdminReviews() {
               )}
             >
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-[13px] font-extrabold text-white">
-                  {r.name.charAt(0).toUpperCase()}
-                </span>
                 <div className="mr-auto min-w-0">
                   <p className="truncate text-[13.5px] font-bold text-ink-900">
                     {r.name}

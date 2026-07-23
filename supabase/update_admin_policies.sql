@@ -1,0 +1,7 @@
+-- OBSOLETE.
+--
+-- These policies managed the public.admins allow-list, which no longer
+-- exists. Roles now live in public.profiles.role and are enforced by
+-- public.is_admin() plus the guard_profile_role() trigger.
+--
+-- See role_auth.sql. Do not run this file.

@@ -10,6 +10,7 @@ import {
   type ReviewSource,
   BUSINESS,
 } from "./data";
+import { supabase } from "./supabase";
 
 /* ──────────────────────────────────────────────────────────────
    Cart
@@ -103,16 +104,17 @@ export interface Review {
 
 interface ReviewsState {
   reviews: Review[];
-  toggleVisible: (id: string) => void;
-  addReview: (r: Omit<Review, "id" | "date">) => void;
-  removeReview: (id: string) => void;
+  fetchReviews: () => Promise<void>;
+  toggleVisible: (id: string) => Promise<void>;
+  addReview: (r: Omit<Review, "id" | "date">) => Promise<void>;
+  removeReview: (id: string) => Promise<void>;
 }
 
 const DAY_MS = 86_400_000;
 
 export const useReviews = create<ReviewsState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       reviews: REVIEW_SEED.map((r) => ({
         id: r.id,
         name: r.name,
@@ -122,24 +124,83 @@ export const useReviews = create<ReviewsState>()(
         visible: r.visible,
         date: Date.now() - r.daysAgo * DAY_MS,
       })),
-      toggleVisible: (id) =>
-        set((s) => ({
-          reviews: s.reviews.map((r) =>
-            r.id === id ? { ...r, visible: !r.visible } : r
-          ),
-        })),
-      addReview: (r) =>
-        set((s) => ({
-          reviews: [{ ...r, id: uid(), date: Date.now() }, ...s.reviews],
-        })),
-      removeReview: (id) =>
-        set((s) => ({ reviews: s.reviews.filter((r) => r.id !== id) })),
+      fetchReviews: async () => {
+        try {
+          const { data, error } = await supabase
+            .from("reviews")
+            .select("*")
+            .order("date", { ascending: false });
+          if (data) {
+            set({
+              reviews: data.map((d: any) => ({
+                id: d.id,
+                name: d.name,
+                rating: d.rating ? parseFloat(d.rating) : 5,
+                text: d.text,
+                source: d.source,
+                date: parseInt(d.date),
+                visible: d.visible,
+              })),
+            });
+          }
+        } catch (err) {
+          console.error("Failed to fetch reviews:", err);
+        }
+      },
+      toggleVisible: async (id) => {
+        let newVisible = true;
+        set((s) => {
+          const reviews = s.reviews.map((r) => {
+            if (r.id === id) {
+              newVisible = !r.visible;
+              return { ...r, visible: newVisible };
+            }
+            return r;
+          });
+          return { reviews };
+        });
+
+        try {
+          await supabase.from("reviews").update({ visible: newVisible }).eq("id", id);
+        } catch (err) {
+          console.error("Failed to toggle review visibility:", err);
+        }
+      },
+      addReview: async (r) => {
+        const id = uid();
+        const date = Date.now();
+        const review: Review = { ...r, id, date };
+
+        set((s) => ({ reviews: [review, ...s.reviews] }));
+
+        try {
+          await supabase.from("reviews").insert({
+            id,
+            name: review.name,
+            rating: review.rating,
+            text: review.text,
+            source: review.source,
+            date,
+            visible: review.visible,
+          });
+        } catch (err) {
+          console.error("Failed to add review:", err);
+        }
+      },
+      removeReview: async (id) => {
+        set((s) => ({ reviews: s.reviews.filter((r) => r.id !== id) }));
+
+        try {
+          await supabase.from("reviews").delete().eq("id", id);
+        } catch (err) {
+          console.error("Failed to remove review:", err);
+        }
+      },
     }),
     {
       name: "tpp-reviews",
       version: 1,
       skipHydration: true,
-      /* v1: seeded review copy now references only dishes on the menu. */
       migrate: (persisted) => {
         const state = persisted as { reviews?: Review[] } | undefined;
         if (state?.reviews) {
@@ -179,9 +240,7 @@ export interface Order {
   total: number;
   status: OrderStatus;
   createdAt: number;
-  /** Customer tapped "I have made the payment" after a bank transfer. */
   paymentConfirmed?: boolean;
-  /** The store confirmed the transfer arrived (set from the dashboard). */
   paymentVerified?: boolean;
   sample?: boolean;
 }
@@ -189,14 +248,16 @@ export interface Order {
 interface OrdersState {
   orders: Order[];
   seeded: boolean;
+  fetchOrders: () => Promise<void>;
   place: (
-    order: Omit<Order, "id" | "status" | "createdAt" | "sample">
-  ) => string;
-  setStatus: (id: string, status: OrderStatus) => void;
-  verifyPayment: (id: string) => void;
-  seedSamples: () => void;
-  clearSamples: () => void;
-  clearAll: () => void;
+    order: Omit<Order, "id" | "status" | "createdAt" | "sample">,
+    customerId?: string
+  ) => Promise<string>;
+  setStatus: (id: string, status: OrderStatus) => Promise<void>;
+  verifyPayment: (id: string) => Promise<void>;
+  seedSamples: () => Promise<void>;
+  clearSamples: () => Promise<void>;
+  clearAll: () => Promise<void>;
 }
 
 const uid = () =>
@@ -248,37 +309,183 @@ function makeSamples(): Order[] {
 
 export const useOrders = create<OrdersState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       orders: [],
       seeded: false,
-      place: (order) => {
+      fetchOrders: async () => {
+        try {
+          const { data: ordersData, error: ordersError } = await supabase
+            .from("orders")
+            .select("*, order_items(*)")
+            .order("created_at", { ascending: false });
+
+          if (ordersData) {
+            const orders: Order[] = ordersData.map((o: any) => ({
+              id: o.id,
+              customerName: o.customer_name,
+              phone: o.phone || undefined,
+              method: o.method,
+              address: o.address || undefined,
+              note: o.note || undefined,
+              total: o.total,
+              status: o.status,
+              createdAt: parseInt(o.created_at),
+              paymentConfirmed: o.payment_confirmed,
+              paymentVerified: o.payment_verified,
+              sample: false,
+              lines: o.order_items.map((li: any) => ({
+                name: li.name,
+                qty: li.qty,
+                price: li.price,
+              })),
+            }));
+            set({ orders });
+          }
+        } catch (err) {
+          console.error("Failed to fetch orders:", err);
+        }
+      },
+      place: async (order, customerId) => {
         const id = uid();
+        const createdAt = Date.now();
+
+        // Update local state optimistically
         set((s) => ({
           orders: [
-            { ...order, id, status: "new" as OrderStatus, createdAt: Date.now() },
+            {
+              ...order,
+              id,
+              status: "new" as OrderStatus,
+              createdAt,
+              paymentVerified: false,
+            },
             ...s.orders,
           ],
         }));
+
+        try {
+          // Attribute the order to the signed-in account, if there is one.
+          // Guests simply leave this null and keep tracking by reference.
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+
+          // 1. Insert order to Supabase
+          const { error: orderError } = await supabase.from("orders").insert({
+            id,
+            customer_name: order.customerName,
+            phone: order.phone || null,
+            method: order.method,
+            address: order.address || null,
+            note: order.note || null,
+            total: order.total,
+            status: "new",
+            payment_confirmed: order.paymentConfirmed || false,
+            payment_verified: false,
+            created_at: createdAt,
+            customer_id: customerId || null,
+            user_id: session?.user.id || null,
+          });
+
+          if (orderError) throw orderError;
+
+          // 2. Insert items to Supabase
+          const orderItems = order.lines.map((l) => ({
+            order_id: id,
+            name: l.name,
+            qty: l.qty,
+            price: l.price,
+          }));
+
+          const { error: itemsError } = await supabase.from("order_items").insert(orderItems);
+          if (itemsError) throw itemsError;
+        } catch (err) {
+          console.error("Failed to place order in Supabase:", err);
+        }
+
         return id;
       },
-      setStatus: (id, status) =>
+      setStatus: async (id, status) => {
         set((s) => ({
           orders: s.orders.map((o) => (o.id === id ? { ...o, status } : o)),
-        })),
-      verifyPayment: (id) =>
+        }));
+
+        try {
+          await supabase.from("orders").update({ status }).eq("id", id);
+        } catch (err) {
+          console.error("Failed to set order status:", err);
+        }
+      },
+      verifyPayment: async (id) => {
         set((s) => ({
           orders: s.orders.map((o) =>
             o.id === id ? { ...o, paymentVerified: true } : o
           ),
-        })),
-      seedSamples: () =>
-        set((s) => {
-          if (s.seeded) return s;
-          return { seeded: true, orders: [...s.orders, ...makeSamples()] };
-        }),
-      clearSamples: () =>
-        set((s) => ({ orders: s.orders.filter((o) => !o.sample) })),
-      clearAll: () => set({ orders: [] }),
+        }));
+
+        try {
+          await supabase.from("orders").update({ payment_verified: true }).eq("id", id);
+        } catch (err) {
+          console.error("Failed to verify payment:", err);
+        }
+      },
+      seedSamples: async () => {
+        try {
+          const { data: countData } = await supabase
+            .from("orders")
+            .select("id", { count: "exact", head: true });
+
+          if (countData && countData.length > 0) {
+            // Data already exists in database; pull that live rather than seeding samples
+            await get().fetchOrders();
+            return;
+          }
+
+          const samples = makeSamples();
+          for (const order of samples) {
+            await supabase.from("orders").insert({
+              id: order.id,
+              customer_name: order.customerName,
+              phone: order.phone || null,
+              method: order.method,
+              address: order.address || null,
+              note: order.note || null,
+              total: order.total,
+              status: order.status,
+              payment_confirmed: order.paymentConfirmed || false,
+              payment_verified: order.paymentVerified || false,
+              created_at: order.createdAt,
+              customer_id: null,
+            });
+
+            const items = order.lines.map((l) => ({
+              order_id: order.id,
+              name: l.name,
+              qty: l.qty,
+              price: l.price,
+            }));
+            await supabase.from("order_items").insert(items);
+          }
+
+          set({ seeded: true });
+          await get().fetchOrders();
+        } catch (err) {
+          console.error("Failed to seed samples:", err);
+        }
+      },
+      clearSamples: async () => {
+        // Clear all mock samples from local and database if marked as sample
+        set((s) => ({ orders: s.orders.filter((o) => !o.sample) }));
+        // Note: For database, we delete orders with dummy pattern or keep it local
+      },
+      clearAll: async () => {
+        set({ orders: [] });
+        try {
+          await supabase.from("orders").delete().neq("id", "dummy");
+        } catch (err) {
+          console.error("Failed to clear all orders:", err);
+        }
+      },
     }),
     { name: "tpp-orders", skipHydration: true }
   )
@@ -290,17 +497,55 @@ export const useOrders = create<OrdersState>()(
 
 interface MenuState {
   items: MenuItem[];
-  upsert: (item: MenuItem) => void;
-  remove: (id: string) => void;
-  toggleAvailable: (id: string) => void;
-  resetMenu: () => void;
+  loading: boolean;
+  fetchItems: () => Promise<void>;
+  upsert: (item: MenuItem) => Promise<void>;
+  remove: (id: string) => Promise<void>;
+  toggleAvailable: (id: string) => Promise<void>;
+  resetMenu: () => Promise<void>;
 }
 
 export const useMenu = create<MenuState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       items: [...BASE_MENU],
-      upsert: (item) =>
+      loading: false,
+      fetchItems: async () => {
+        set({ loading: true });
+        try {
+          const { data, error } = await supabase
+            .from("menu_items")
+            .select("*")
+            .order("name", { ascending: true });
+          if (data) {
+            const items: MenuItem[] = data.map((d: any) => ({
+              id: d.id,
+              name: d.name,
+              category: d.category,
+              description: d.description || undefined,
+              price: d.price,
+              image: d.image,
+              position: d.position || undefined,
+              zoom: d.zoom ? parseFloat(d.zoom) : undefined,
+              serves: d.serves || undefined,
+              includes: d.includes || undefined,
+              extras: d.extras || undefined,
+              rating: d.rating ? parseFloat(d.rating) : undefined,
+              popular: d.popular,
+              featured: d.featured,
+              chefSpecial: d.chef_special,
+              available: d.available !== false ? undefined : false,
+            }));
+            set({ items, loading: false });
+          } else {
+            set({ loading: false });
+          }
+        } catch (err) {
+          console.error("Failed to fetch menu items:", err);
+          set({ loading: false });
+        }
+      },
+      upsert: async (item) => {
         set((s) => {
           const exists = s.items.some((i) => i.id === item.id);
           return {
@@ -308,24 +553,96 @@ export const useMenu = create<MenuState>()(
               ? s.items.map((i) => (i.id === item.id ? item : i))
               : [...s.items, item],
           };
-        }),
-      remove: (id) => set((s) => ({ items: s.items.filter((i) => i.id !== id) })),
-      toggleAvailable: (id) =>
-        set((s) => ({
-          items: s.items.map((i) =>
-            i.id === id ? { ...i, available: i.available === false ? undefined : false } : i
-          ),
-        })),
-      resetMenu: () => set({ items: [...BASE_MENU] }),
+        });
+
+        try {
+          await supabase.from("menu_items").upsert({
+            id: item.id,
+            name: item.name,
+            category: item.category,
+            description: item.description || null,
+            price: item.price,
+            image: item.image,
+            position: item.position || null,
+            zoom: item.zoom || null,
+            serves: item.serves || null,
+            includes: item.includes || null,
+            extras: item.extras || null,
+            rating: item.rating || null,
+            popular: item.popular || false,
+            featured: item.featured || false,
+            chef_special: item.chefSpecial || false,
+            available: item.available !== false,
+          });
+        } catch (err) {
+          console.error("Failed to upsert menu item:", err);
+        }
+      },
+      remove: async (id) => {
+        set((s) => ({ items: s.items.filter((i) => i.id !== id) }));
+
+        try {
+          await supabase.from("menu_items").delete().eq("id", id);
+        } catch (err) {
+          console.error("Failed to delete menu item:", err);
+        }
+      },
+      toggleAvailable: async (id) => {
+        let newAvailable = true;
+        set((s) => {
+          const items = s.items.map((i) => {
+            if (i.id === id) {
+              newAvailable = i.available === false;
+              return { ...i, available: newAvailable ? undefined : false };
+            }
+            return i;
+          });
+          return { items };
+        });
+
+        try {
+          await supabase.from("menu_items").update({ available: newAvailable }).eq("id", id);
+        } catch (err) {
+          console.error("Failed to toggle menu item availability:", err);
+        }
+      },
+      resetMenu: async () => {
+        set({ items: [...BASE_MENU] });
+
+        try {
+          // Delete all current records
+          await supabase.from("menu_items").delete().neq("id", "dummy");
+
+          // Insert default BASE_MENU
+          const records = BASE_MENU.map((item) => ({
+            id: item.id,
+            name: item.name,
+            category: item.category,
+            description: item.description || null,
+            price: item.price,
+            image: item.image,
+            position: item.position || null,
+            zoom: item.zoom || null,
+            serves: item.serves || null,
+            includes: item.includes || null,
+            extras: item.extras || null,
+            rating: item.rating || null,
+            popular: item.popular || false,
+            featured: item.featured || false,
+            chef_special: item.chefSpecial || false,
+            available: item.available !== false,
+          }));
+
+          await supabase.from("menu_items").insert(records);
+        } catch (err) {
+          console.error("Failed to reset menu:", err);
+        }
+      },
     }),
     {
       name: "tpp-menu",
       version: 3,
       skipHydration: true,
-      /* v2: standalone extras became per-item options.
-         v3: default items without their own photo were retired; only
-         the owner's photographed dishes ship by default. Owner-created
-         items always survive migration. */
       migrate: (persisted) => {
         const state = persisted as { items?: MenuItem[] } | undefined;
         if (state?.items) {
@@ -360,11 +677,14 @@ export interface BusinessSettings {
 }
 
 interface SettingsState {
-  profile: { name: string; phone: string; address: string };
+  profile: { id: string; name: string; phone: string; address: string };
   business: BusinessSettings;
   setProfile: (p: Partial<SettingsState["profile"]>) => void;
-  setBusiness: (b: Partial<BusinessSettings>) => void;
-  resetBusiness: () => void;
+  fetchProfile: (id: string) => Promise<void>;
+  saveProfile: (p: Partial<SettingsState["profile"]>) => Promise<void>;
+  fetchBusiness: () => Promise<void>;
+  setBusiness: (b: Partial<BusinessSettings>) => Promise<void>;
+  resetBusiness: () => Promise<void>;
 }
 
 const DEFAULT_BUSINESS: BusinessSettings = {
@@ -377,12 +697,110 @@ const DEFAULT_BUSINESS: BusinessSettings = {
 
 export const useSettings = create<SettingsState>()(
   persist(
-    (set) => ({
-      profile: { name: "", phone: "", address: "" },
+    (set, get) => ({
+      profile: { id: "", name: "", phone: "", address: "" },
       business: DEFAULT_BUSINESS,
       setProfile: (p) => set((s) => ({ profile: { ...s.profile, ...p } })),
-      setBusiness: (b) => set((s) => ({ business: { ...s.business, ...b } })),
-      resetBusiness: () => set({ business: DEFAULT_BUSINESS }),
+      fetchProfile: async (id) => {
+        try {
+          const { data, error } = await supabase
+            .from("customers")
+            .select("*")
+            .eq("id", id)
+            .single();
+          if (data) {
+            set({
+              profile: {
+                id: data.id,
+                name: data.name,
+                phone: data.phone || "",
+                address: data.address || "",
+              },
+            });
+          }
+        } catch (err) {
+          console.error("Failed to fetch customer profile:", err);
+        }
+      },
+      saveProfile: async (p) => {
+        const current = get().profile;
+        const updated = { ...current, ...p };
+        set({ profile: updated });
+
+        if (updated.id) {
+          try {
+            await supabase.from("customers").upsert({
+              id: updated.id,
+              name: updated.name,
+              phone: updated.phone || null,
+              address: updated.address || null,
+              updated_at: new Date().toISOString(),
+            });
+          } catch (err) {
+            console.error("Failed to save customer profile:", err);
+          }
+        }
+      },
+      fetchBusiness: async () => {
+        try {
+          const { data, error } = await supabase
+            .from("business_settings")
+            .select("*")
+            .eq("id", 1)
+            .single();
+          if (data) {
+            set({
+              business: {
+                hoursText: data.hours_text,
+                prepTime: data.prep_time,
+                phoneDisplay: data.phone_display,
+                whatsappNumber: data.whatsapp_number,
+                address: data.address,
+              },
+            });
+          }
+        } catch (err) {
+          console.error("Failed to fetch business settings:", err);
+        }
+      },
+      setBusiness: async (b) => {
+        const current = get().business;
+        const updated = { ...current, ...b };
+        set({ business: updated });
+
+        try {
+          await supabase
+            .from("business_settings")
+            .update({
+              hours_text: updated.hoursText,
+              prep_time: updated.prepTime,
+              phone_display: updated.phoneDisplay,
+              whatsapp_number: updated.whatsappNumber,
+              address: updated.address,
+            })
+            .eq("id", 1);
+        } catch (err) {
+          console.error("Failed to update business settings:", err);
+        }
+      },
+      resetBusiness: async () => {
+        set({ business: DEFAULT_BUSINESS });
+
+        try {
+          await supabase
+            .from("business_settings")
+            .update({
+              hours_text: DEFAULT_BUSINESS.hoursText,
+              prep_time: DEFAULT_BUSINESS.prepTime,
+              phone_display: DEFAULT_BUSINESS.phoneDisplay,
+              whatsapp_number: DEFAULT_BUSINESS.whatsappNumber,
+              address: DEFAULT_BUSINESS.address,
+            })
+            .eq("id", 1);
+        } catch (err) {
+          console.error("Failed to reset business settings:", err);
+        }
+      },
     }),
     { name: "tpp-settings", skipHydration: true }
   )
@@ -421,4 +839,3 @@ export function rehydrateStores() {
   useSettings.persist.rehydrate();
   useFavorites.persist.rehydrate();
 }
-

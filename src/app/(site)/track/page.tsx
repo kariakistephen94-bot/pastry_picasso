@@ -12,11 +12,12 @@ import {
 } from "lucide-react";
 import StatusChip from "@/components/StatusChip";
 import { WhatsAppIcon } from "@/components/icons";
-import { useOrders, type Order } from "@/lib/store";
+import { useSettings, type Order } from "@/lib/store";
 import { downloadReceipt } from "@/lib/receipt";
 import { whatsappChatUrl } from "@/lib/whatsapp";
 import { naira, normalizeTrackingInput, orderRef, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { supabase } from "@/lib/supabase";
 
 function buildSteps(order: Order) {
   const s = order.status;
@@ -61,53 +62,135 @@ function buildSteps(order: Order) {
 }
 
 export default function TrackPage() {
-  const orders = useOrders((s) => s.orders);
+  const profile = useSettings((s) => s.profile);
   const [query, setQuery] = useState("");
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeOrder, setActiveOrder] = useState<Order | null>(null);
+  const [myOrders, setMyOrders] = useState<Order[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  const myOrders = useMemo(
-    () => orders.filter((o) => !o.sample).slice(0, 8),
-    [orders]
-  );
+  // Load past guest orders from Supabase on mount
+  useEffect(() => {
+    const loadMyOrders = async () => {
+      if (!profile.id) {
+        setLoadingOrders(false);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from("orders")
+          .select("*, order_items(*)")
+          .eq("customer_id", profile.id)
+          .order("created_at", { ascending: false })
+          .limit(8);
 
-  const activeOrder = useMemo(
-    () => orders.find((o) => o.id === activeId) ?? null,
-    [orders, activeId]
-  );
+        if (data) {
+          setMyOrders(
+            data.map((o: any) => ({
+              id: o.id,
+              customerName: o.customer_name,
+              phone: o.phone || undefined,
+              method: o.method,
+              address: o.address || undefined,
+              note: o.note || undefined,
+              total: o.total,
+              status: o.status,
+              createdAt: parseInt(o.created_at),
+              paymentConfirmed: o.payment_confirmed,
+              paymentVerified: o.payment_verified,
+              lines: o.order_items.map((li: any) => ({
+                name: li.name,
+                qty: li.qty,
+                price: li.price,
+              })),
+            }))
+          );
+        }
+      } catch (err) {
+        console.error("Failed to load past orders:", err);
+      } finally {
+        setLoadingOrders(false);
+      }
+    };
+
+    loadMyOrders();
+  }, [profile.id]);
+
+  const lookup = async (raw?: string) => {
+    const target = raw ?? query;
+    const suffix = normalizeTrackingInput(target);
+    if (!suffix) return;
+
+    setSearching(true);
+    setNotFound(false);
+
+    try {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*, order_items(*)")
+        .ilike("id", `%${suffix}`);
+
+      if (data && data.length > 0) {
+        const matched = data.find(
+          (o) => normalizeTrackingInput(o.id) === suffix
+        );
+        if (matched) {
+          const ord: Order = {
+            id: matched.id,
+            customerName: matched.customer_name,
+            phone: matched.phone || undefined,
+            method: matched.method,
+            address: matched.address || undefined,
+            note: matched.note || undefined,
+            total: matched.total,
+            status: matched.status,
+            createdAt: parseInt(matched.created_at),
+            paymentConfirmed: matched.payment_confirmed,
+            paymentVerified: matched.payment_verified,
+            lines: matched.order_items.map((li: any) => ({
+              name: li.name,
+              qty: li.qty,
+              price: li.price,
+            })),
+          };
+          setActiveOrder(ord);
+          setNotFound(false);
+          setQuery(orderRef(matched.id));
+        } else {
+          setActiveOrder(null);
+          setNotFound(true);
+        }
+      } else {
+        setActiveOrder(null);
+        setNotFound(true);
+      }
+    } catch (err) {
+      console.error("Failed to lookup order:", err);
+      setActiveOrder(null);
+      setNotFound(true);
+    } finally {
+      setSearching(false);
+    }
+  };
 
   /* Deep link: /track?id=TPP-XXXXX */
   useEffect(() => {
     const param = new URLSearchParams(window.location.search).get("id");
-    if (param) setQuery(param.toUpperCase());
+    if (param) {
+      const uParam = param.toUpperCase();
+      setQuery(uParam);
+      lookup(uParam);
+    }
   }, []);
 
   /* Auto-select the most recent order when nothing is searched. */
   useEffect(() => {
-    if (!activeId && !query && myOrders.length > 0) setActiveId(myOrders[0].id);
-  }, [activeId, query, myOrders]);
-
-  const lookup = (raw?: string) => {
-    const suffix = normalizeTrackingInput(raw ?? query);
-    if (!suffix) return;
-    const found = orders.find(
-      (o) => !o.sample && o.id.toUpperCase().endsWith(suffix)
-    );
-    if (found) {
-      setActiveId(found.id);
-      setNotFound(false);
-    } else {
-      setActiveId(null);
-      setNotFound(true);
+    if (!activeOrder && !query && myOrders.length > 0) {
+      setActiveOrder(myOrders[0]);
     }
-  };
-
-  /* Run lookup automatically once orders hydrate and a deep link exists. */
-  useEffect(() => {
-    if (query && !activeId) lookup(query);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders.length]);
+  }, [activeOrder, query, myOrders]);
 
   const handleDownload = async () => {
     if (!activeOrder || downloading) return;
@@ -331,14 +414,14 @@ export default function TrackPage() {
                 key={o.id}
                 type="button"
                 onClick={() => {
-                  setActiveId(o.id);
+                  setActiveOrder(o);
                   setNotFound(false);
                   setQuery(orderRef(o.id));
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
                 className={cn(
                   "flex items-center gap-3 rounded-[18px] bg-white p-3.5 text-left shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-card",
-                  o.id === activeId && "ring-2 ring-brand-400"
+                  o.id === activeOrder?.id && "ring-2 ring-brand-400"
                 )}
               >
                 <div className="min-w-0 flex-1">
