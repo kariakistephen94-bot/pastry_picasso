@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { ChefHat, Clock, MapPin, Search } from "lucide-react";
+import { ChefHat, ChevronRight, Clock, MapPin, Search } from "lucide-react";
 import Hero from "@/components/home/Hero";
 import TrustBadges from "@/components/home/TrustBadges";
 import SectionHeader from "@/components/SectionHeader";
@@ -17,13 +17,15 @@ import ReviewsBlock from "@/components/blocks/ReviewsBlock";
 import SiteFooter from "@/components/blocks/SiteFooter";
 import { BUSINESS, CATEGORIES, IMG } from "@/lib/data";
 import { useMenu } from "@/lib/store";
+import { cn } from "@/lib/cn";
 
 export default function HomePage() {
   const items = useMenu((s) => s.items);
 
-  /* Featured strip is capped at 5, no matter how many are flagged. */
-  const FEATURED_LIMIT = 5;
-  const HOME_MENU_LIMIT = 10;
+  /* Featured strip is capped at 3, no matter how many are flagged. */
+  const FEATURED_LIMIT = 3;
+  /* The home page is a taster; the full list lives on /menu. */
+  const HOME_MENU_LIMIT = 4;
 
   const featured = useMemo(
     () =>
@@ -161,7 +163,18 @@ export default function HomePage() {
             sub="Party platters, burgers and fresh bakes"
             action={{ href: "/menu", label: "Full menu" }}
           />
-          <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:px-0">
+          <div
+            className={cn(
+              "no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:gap-4 lg:overflow-visible lg:px-0",
+              // Fewer than three categories would otherwise leave a hole in
+              // the row rather than spreading across it.
+              activeCategories.length === 1
+                ? "lg:grid-cols-1"
+                : activeCategories.length === 2
+                  ? "lg:grid-cols-2"
+                  : "lg:grid-cols-3"
+            )}
+          >
             {activeCategories.map((c, i) => (
               <CategoryCard key={c.id} category={c} index={i} size="sm" />
             ))}
@@ -188,12 +201,20 @@ export default function HomePage() {
             <SectionHeader
               title="From the menu"
               sub="Fresh picks across every category"
-              action={{ href: "/menu", label: "Full menu" }}
             />
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
               {homeMenu.map((item, i) => (
                 <FoodCard key={item.id} item={item} index={i} />
               ))}
+            </div>
+            <div className="mt-5 flex justify-center">
+              <Link
+                href="/menu"
+                className="group flex h-12 items-center gap-1.5 rounded-2xl bg-ink-900 px-7 text-[13.5px] font-bold text-white shadow-card transition-all hover:bg-ink-700 active:scale-[0.98]"
+              >
+                View all menu
+                <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              </Link>
             </div>
           </section>
         )}

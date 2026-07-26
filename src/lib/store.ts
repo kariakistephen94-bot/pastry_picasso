@@ -197,6 +197,7 @@ export const useReviews = create<ReviewsState>()(
 
 export interface PlaceOrderInput {
   customerName: string;
+  email?: string;
   phone?: string;
   method: "pickup" | "delivery";
   address?: string;
@@ -238,6 +239,7 @@ export const useOrders = create<OrdersState>()(
       place: async (input) => {
         const { order } = await api.post<{ order: Order }>("/api/orders", {
           customerName: input.customerName,
+          email: input.email,
           phone: input.phone,
           method: input.method,
           address: input.address,
@@ -418,7 +420,7 @@ export const useMenu = create<MenuState>()(
    ────────────────────────────────────────────────────────────── */
 
 interface SettingsState {
-  profile: { id: string; name: string; phone: string; address: string };
+  profile: { id: string; name: string; email: string; phone: string; address: string };
   business: BusinessSettings;
   setProfile: (p: Partial<SettingsState["profile"]>) => void;
   fetchProfile: (id: string) => Promise<void>;
@@ -439,13 +441,13 @@ const DEFAULT_BUSINESS: BusinessSettings = {
 export const useSettings = create<SettingsState>()(
   persist(
     (set, get) => ({
-      profile: { id: "", name: "", phone: "", address: "" },
+      profile: { id: "", name: "", email: "", phone: "", address: "" },
       business: DEFAULT_BUSINESS,
       setProfile: (p) => set((s) => ({ profile: { ...s.profile, ...p } })),
       fetchProfile: async (id) => {
         try {
           const { profile } = await api.get<{
-            profile: { id: string; name: string; phone: string; address: string } | null;
+            profile: { id: string; name: string; email: string; phone: string; address: string } | null;
           }>(`/api/customers/${id}`);
           if (profile) set({ profile });
         } catch (err) {
@@ -459,6 +461,7 @@ export const useSettings = create<SettingsState>()(
         try {
           await api.put(`/api/customers/${updated.id}`, {
             name: updated.name,
+            email: updated.email,
             phone: updated.phone,
             address: updated.address,
           });

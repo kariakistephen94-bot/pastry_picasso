@@ -29,7 +29,11 @@ export default function CategoryCard({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-20px" }}
       transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: Math.min(index * 0.04, 0.3) }}
-      className={size === "sm" ? "w-[124px] shrink-0 snap-start lg:w-auto" : ""}
+      className={
+        size === "sm"
+          ? "w-[124px] shrink-0 grow snap-start lg:w-auto lg:grow-0"
+          : ""
+      }
     >
       <Link
         href={`/menu#${category.id}`}

@@ -9,6 +9,10 @@ const STYLES: Record<OrderStatus, { label: string; cls: string; dot: string }> =
   cancelled: { label: "Cancelled", cls: "bg-red-100 text-red-700", dot: "bg-red-500" },
 };
 
+export const STATUS_LABEL = Object.fromEntries(
+  Object.entries(STYLES).map(([k, v]) => [k, v.label])
+) as Record<OrderStatus, string>;
+
 export default function StatusChip({ status }: { status: OrderStatus }) {
   const s = STYLES[status];
   return (

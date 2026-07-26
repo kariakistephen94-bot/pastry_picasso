@@ -8,6 +8,7 @@ function mapProfile(d: any) {
   return {
     id: d.id,
     name: d.name ?? "",
+    email: d.email ?? "",
     phone: d.phone ?? "",
     address: d.address ?? "",
   };
@@ -49,6 +50,7 @@ export async function PUT(
     const row = {
       id,
       name: name.slice(0, 120),
+      email: body?.email ? String(body.email).trim().slice(0, 120) : null,
       phone: body?.phone ? String(body.phone).trim().slice(0, 40) : null,
       address: body?.address ? String(body.address).trim().slice(0, 300) : null,
       updated_at: new Date().toISOString(),

@@ -12,6 +12,7 @@ create table public.admins (
 create table public.customers (
   id uuid primary key default gen_random_uuid(),
   name text not null,
+  email text,
   phone text,
   address text,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
@@ -52,10 +53,12 @@ create table public.reviews (
 create table public.orders (
   id text primary key, -- client-generated uid()
   customer_name text not null,
+  email text,
   phone text,
   method text not null,
   address text,
   note text,
+  cancel_note text,
   total integer not null,
   status text not null default 'new',
   payment_confirmed boolean default false,

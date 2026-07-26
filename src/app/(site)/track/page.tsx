@@ -234,9 +234,20 @@ export default function TrackPage() {
               <p className="font-display text-[18px] font-extrabold text-red-600">
                 Order Cancelled
               </p>
-              <p className="mt-1.5 text-[12.5px] font-medium leading-relaxed text-ink-500 max-w-[280px] mx-auto">
-                This order was cancelled. If you have any questions, please contact support on WhatsApp.
-              </p>
+              {activeOrder.cancelNote ? (
+                <div className="mt-3.5 mx-auto max-w-[340px] rounded-2xl bg-white p-3.5 border border-red-100 text-left">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-red-800">
+                    Reason from Kitchen
+                  </p>
+                  <p className="mt-1.5 text-[13px] font-medium leading-relaxed text-ink-800 italic">
+                    &quot;{activeOrder.cancelNote}&quot;
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-1.5 text-[12.5px] font-medium leading-relaxed text-ink-500 max-w-[280px] mx-auto">
+                  This order was cancelled. If you have any questions, please contact support on WhatsApp.
+                </p>
+              )}
             </div>
           ) : (
             <div className="px-5 py-5">

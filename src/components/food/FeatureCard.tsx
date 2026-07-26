@@ -17,7 +17,22 @@ export default function FeatureCard({
 }) {
   const add = useCart((s) => s.add);
   const openItem = useUI((s) => s.openItem);
+  const openExtras = useUI((s) => s.openExtras);
   const showToast = useUI((s) => s.showToast);
+
+  const hasExtras = (item.extras?.length ?? 0) > 0;
+
+  /* Adding straight to the cart would silently skip the extras the
+     customer is entitled to choose, so hand off to the picker instead. */
+  const quickAdd = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (hasExtras) {
+      openExtras(item);
+      return;
+    }
+    add(item);
+    showToast("Added to your order");
+  };
 
   return (
     <motion.article
@@ -50,15 +65,16 @@ export default function FeatureCard({
           <p className="mt-0.5 text-[13.5px] font-extrabold text-brand-300">
             {naira(item.price)}
           </p>
+          {hasExtras && (
+            <p className="mt-0.5 truncate text-[10.5px] font-bold text-white/80">
+              + extras available
+            </p>
+          )}
         </div>
         <button
           type="button"
           aria-label={`Add ${item.name} to cart`}
-          onClick={(e) => {
-            e.stopPropagation();
-            add(item);
-            showToast("Added to your order");
-          }}
+          onClick={quickAdd}
           className="glass flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white transition-transform hover:scale-105 active:scale-90"
         >
           <Plus className="h-[18px] w-[18px]" strokeWidth={2.6} />

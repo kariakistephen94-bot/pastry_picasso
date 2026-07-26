@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Banknote,
   Bike,
   Ban,
   Check,
+  ChevronDown,
   ChevronRight,
   Eye,
   Inbox,
@@ -17,7 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/icons";
-import StatusChip from "@/components/StatusChip";
+import StatusChip, { STATUS_LABEL } from "@/components/StatusChip";
 import Pagination from "@/components/Pagination";
 import { api } from "@/lib/api";
 import type { Order, OrderStatus } from "@/lib/store";
@@ -47,6 +49,10 @@ const NEXT: Partial<Record<OrderStatus, { to: OrderStatus; label: string }>> = {
   ready: { to: "completed", label: "Complete order" },
 };
 
+/* Statuses an order can be moved between. Cancelling is deliberately not
+   here: it needs a note, so it goes through the details sheet. */
+const WORKFLOW: OrderStatus[] = ["new", "preparing", "ready", "completed"];
+
 const PAGE_SIZE = 10;
 
 export default function AdminOrders() {
@@ -60,6 +66,8 @@ export default function AdminOrders() {
   const [sort, setSort] = useState("recent");
   const [loading, setLoading] = useState(true);
   const [detailsId, setDetailsId] = useState<string | null>(null);
+  /* Cancelling from the row opens the sheet straight onto its note form. */
+  const [startCancel, setStartCancel] = useState(false);
 
   const load = useCallback(
     async (silent = false) => {
@@ -120,12 +128,16 @@ export default function AdminOrders() {
     load(true);
   };
 
-  const cancel = async (id: string) => {
+  const cancel = async (id: string, cancelNote: string) => {
     setOrders((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, status: "cancelled" } : o))
+      prev.map((o) => (o.id === id ? { ...o, status: "cancelled", cancelNote } : o))
     );
     try {
-      await api.patch(`/api/admin/orders/${id}`, { status: "cancelled" }, { auth: true });
+      await api.patch(
+        `/api/admin/orders/${id}`,
+        { status: "cancelled", cancelNote },
+        { auth: true }
+      );
     } catch (err) {
       console.error("Failed to cancel order:", err);
     }
@@ -258,20 +270,38 @@ export default function AdminOrders() {
           </p>
         </div>
       ) : (
-        <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AnimatePresence initial={false}>
-            {orders.map((o) => (
-              <OrderCard
-                key={o.id}
-                order={o}
-                onAdvance={advance}
-                onVerify={verify}
-                onCancel={cancel}
-                onDetails={() => setDetailsId(o.id)}
-              />
-            ))}
-          </AnimatePresence>
-        </ul>
+        <div className="overflow-x-auto rounded-[24px] bg-white shadow-soft">
+          <table className="w-full border-collapse text-left">
+            <thead>
+              <tr className="border-b border-cream-200 bg-cream-100/70 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-400">
+                <th className="px-3 py-3 font-bold sm:px-4">Order</th>
+                <th className="hidden px-2.5 py-3 font-bold md:table-cell">Placed</th>
+                <th className="hidden px-2.5 py-3 font-bold lg:table-cell">Items</th>
+                <th className="px-2.5 py-3 text-right font-bold">Total</th>
+                <th className="hidden px-2.5 py-3 font-bold sm:table-cell">Payment</th>
+                <th className="hidden px-2.5 py-3 font-bold sm:table-cell">Status</th>
+                <th className="px-3 py-3 text-right font-bold sm:px-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <AnimatePresence initial={false}>
+                {orders.map((o) => (
+                  <OrderRow
+                    key={o.id}
+                    order={o}
+                    onAdvance={advance}
+                    onVerify={verify}
+                    onDetails={() => setDetailsId(o.id)}
+                    onCancelRequest={() => {
+                      setStartCancel(true);
+                      setDetailsId(o.id);
+                    }}
+                  />
+                ))}
+              </AnimatePresence>
+            </tbody>
+          </table>
+        </div>
       )}
 
       <Pagination
@@ -284,7 +314,11 @@ export default function AdminOrders() {
 
       <OrderDetailsModal
         order={detailsOrder}
-        onClose={() => setDetailsId(null)}
+        initialCancel={startCancel}
+        onClose={() => {
+          setDetailsId(null);
+          setStartCancel(false);
+        }}
         onAdvance={advance}
         onVerify={verify}
         onCancel={cancel}
@@ -293,7 +327,180 @@ export default function AdminOrders() {
   );
 }
 
+/* ── Status select ───────────────────────────────────────────
+   Rendered into document.body: the table scrolls horizontally, and an
+   overflow container clips a dropdown on both axes. */
+
+function StatusMenu({
+  order: o,
+  onAdvance,
+  onVerify,
+  onCancelRequest,
+}: {
+  order: Order;
+  onAdvance: (id: string, s: OrderStatus) => void;
+  onVerify: (id: string) => void;
+  onCancelRequest: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  const verified = !!o.paymentVerified;
+  const completed = o.status === "completed";
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    // The menu is anchored to a rect captured at open time, so close it
+    // rather than let it drift away from its row.
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const toggle = () => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+    setOpen((v) => !v);
+  };
+
+  const item =
+    "flex w-full items-center gap-2 px-3 py-2.5 text-left text-[12.5px] font-bold transition-colors disabled:cursor-not-allowed";
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={toggle}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Change status for order ${orderRef(o.id)}`}
+        className="flex h-9 shrink-0 items-center gap-1 rounded-xl bg-ink-900 px-2.5 text-[12px] font-bold text-white transition-all hover:bg-ink-700 active:scale-95 sm:px-3"
+      >
+        <span className="hidden sm:inline">{STATUS_LABEL[o.status]}</span>
+        <ChevronDown className="h-4 w-4 shrink-0" />
+      </button>
+
+      {open &&
+        pos &&
+        createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-[80]"
+              onClick={() => setOpen(false)}
+            />
+            <div
+              role="menu"
+              style={{ top: pos.top, right: pos.right }}
+              className="fixed z-[81] w-[216px] overflow-hidden rounded-2xl bg-white py-1 shadow-float ring-1 ring-cream-200"
+            >
+              {!verified && (
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setOpen(false);
+                      onVerify(o.id);
+                    }}
+                    className={cn(item, "text-emerald-700 hover:bg-emerald-50")}
+                  >
+                    <Check className="h-4 w-4 shrink-0" strokeWidth={3} />
+                    Confirm payment
+                  </button>
+                  <p className="border-y border-cream-200 bg-cream-50 px-3 py-2 text-[11px] font-semibold leading-snug text-ink-400">
+                    Confirm the transfer before moving this order along.
+                  </p>
+                </>
+              )}
+
+              {WORKFLOW.map((s) => {
+                const current = s === o.status;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    role="menuitem"
+                    disabled={!verified || current}
+                    onClick={() => {
+                      setOpen(false);
+                      onAdvance(o.id, s);
+                    }}
+                    className={cn(
+                      item,
+                      current
+                        ? "text-ink-900"
+                        : "text-ink-600 hover:bg-cream-100 disabled:text-ink-300 disabled:hover:bg-transparent"
+                    )}
+                  >
+                    <Check
+                      className={cn(
+                        "h-4 w-4 shrink-0",
+                        current ? "text-brand-600" : "opacity-0"
+                      )}
+                      strokeWidth={3}
+                    />
+                    {STATUS_LABEL[s]}
+                  </button>
+                );
+              })}
+
+              {!completed && (
+                <>
+                  <div className="my-1 border-t border-cream-200" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setOpen(false);
+                      onCancelRequest();
+                    }}
+                    className={cn(item, "text-red-600 hover:bg-red-50")}
+                  >
+                    <Ban className="h-4 w-4 shrink-0" />
+                    Cancel order…
+                  </button>
+                </>
+              )}
+            </div>
+          </>,
+          document.body
+        )}
+    </>
+  );
+}
+
 /* ── Full order details (review before confirming payment) ──── */
+
+function PaymentChip({ order: o, short }: { order: Order; short?: boolean }) {
+  const [tint, label] = o.paymentVerified
+    ? ["bg-emerald-100 text-emerald-800", "Paid"]
+    : o.paymentConfirmed
+      ? ["bg-amber-100 text-amber-800", short ? "Claimed" : "Transfer claimed"]
+      : ["bg-cream-200 text-ink-500", "Unpaid"];
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold",
+        tint
+      )}
+    >
+      <Banknote className="h-3 w-3 shrink-0" />
+      {label}
+    </span>
+  );
+}
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -310,19 +517,35 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 
 function OrderDetailsModal({
   order: o,
+  initialCancel,
   onClose,
   onAdvance,
   onVerify,
   onCancel,
 }: {
   order: Order | null;
+  /** Open straight onto the cancellation note, e.g. from the row menu. */
+  initialCancel?: boolean;
   onClose: () => void;
   onAdvance: (id: string, s: OrderStatus) => void;
   onVerify: (id: string) => void;
-  onCancel: (id: string) => void;
+  onCancel: (id: string, reason: string) => void;
 }) {
   useLockBody(!!o);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+
+  /* Keyed on the id, not the object: a background refresh swaps in a new
+     order object, and that must not wipe a half-typed cancellation note. */
+  const orderId = o?.id ?? null;
+  useEffect(() => {
+    if (orderId) {
+      setConfirmCancel(!!initialCancel);
+    } else {
+      setConfirmCancel(false);
+      setCancelReason("");
+    }
+  }, [orderId, initialCancel]);
 
   const next = o ? NEXT[o.status] : undefined;
   const verified = !!o?.paymentVerified;
@@ -361,19 +584,7 @@ function OrderDetailsModal({
                   {orderRef(o.id)}
                 </p>
               </div>
-              {verified ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800">
-                  <Banknote className="h-3 w-3" /> Paid
-                </span>
-              ) : o.paymentConfirmed ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800">
-                  <Banknote className="h-3 w-3" /> Transfer claimed
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-cream-200 px-2.5 py-1 text-[11px] font-bold text-ink-500">
-                  <Banknote className="h-3 w-3" /> Unpaid
-                </span>
-              )}
+              <PaymentChip order={o} />
               <StatusChip status={o.status} />
               <button
                 type="button"
@@ -466,6 +677,11 @@ function OrderDetailsModal({
                     This order was cancelled. It is not counted in revenue or
                     analytics.
                   </p>
+                  {o.cancelNote && (
+                    <p className="mt-2.5 text-[12px] font-medium leading-relaxed text-red-700 bg-white p-2.5 rounded-xl border border-red-100">
+                      <strong>Cancellation Note:</strong> &quot;{o.cancelNote}&quot;
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div
@@ -503,67 +719,96 @@ function OrderDetailsModal({
             </div>
 
             {/* Footer actions */}
-            <div className="flex items-center gap-2 border-t border-cream-200 bg-cream-50/95 px-5 py-3.5 pb-safe backdrop-blur">
-              {o.phone && (
-                <a
-                  href={`https://wa.me/${o.phone.replace(/\D/g, "").replace(/^0/, "234")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`Chat with ${o.customerName} on WhatsApp`}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 transition-transform hover:scale-105 active:scale-95"
-                >
-                  <WhatsAppIcon className="h-5 w-5" />
-                </a>
-              )}
-
-              {/* Cancel is available until the order is closed. */}
-              {!closed && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!confirmCancel) {
-                      setConfirmCancel(true);
-                      setTimeout(() => setConfirmCancel(false), 3000);
-                      return;
-                    }
-                    onCancel(o.id);
-                    onClose();
-                  }}
-                  className={cn(
-                    "flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-2xl px-3.5 text-[12.5px] font-bold transition-colors",
-                    confirmCancel
-                      ? "bg-red-600 text-white"
-                      : "bg-red-50 text-red-600 hover:bg-red-100"
-                  )}
-                >
-                  <Ban className="h-4 w-4" />
-                  {confirmCancel ? "Confirm cancel?" : "Cancel"}
-                </button>
-              )}
-
-              {cancelled ? (
-                <span className="flex h-11 flex-1 items-center justify-center rounded-2xl bg-red-50 text-[12.5px] font-bold text-red-600">
-                  Order cancelled
-                </span>
-              ) : next ? (
-                verified ? (
+            <div className="flex flex-col gap-3 border-t border-cream-200 bg-cream-50/95 px-5 py-3.5 pb-safe backdrop-blur">
+              {confirmCancel && !closed ? (
+                <div className="flex flex-col gap-2 w-full">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[12px] font-bold text-red-700">Cancel Reason (sent to customer)</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConfirmCancel(false);
+                        setCancelReason("");
+                      }}
+                      className="text-[11px] font-bold text-ink-400 hover:text-ink-600"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                  <textarea
+                    placeholder="Provide a cancellation note for the customer..."
+                    className="w-full min-h-[64px] rounded-xl bg-white p-2.5 text-[12.5px] font-medium text-ink-900 border border-cream-300 outline-none focus:border-red-400 focus:ring-1 focus:ring-red-400"
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                  />
                   <button
                     type="button"
-                    onClick={() => onAdvance(o.id, next.to)}
-                    className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-2xl bg-ink-900 text-[13.5px] font-bold text-white transition-all hover:bg-ink-700 active:scale-[0.98]"
+                    disabled={!cancelReason.trim()}
+                    onClick={() => {
+                      onCancel(o.id, cancelReason.trim());
+                      onClose();
+                    }}
+                    className={cn(
+                      "flex h-10 w-full items-center justify-center gap-1.5 rounded-xl text-[12.5px] font-bold text-white transition-all",
+                      cancelReason.trim()
+                        ? "bg-red-600 hover:bg-red-700"
+                        : "bg-ink-300 cursor-not-allowed"
+                    )}
                   >
-                    {next.label}
-                    <ChevronRight className="h-4 w-4" />
+                    <Ban className="h-4 w-4" />
+                    Confirm Cancellation
                   </button>
-                ) : (
-                  <span className="flex h-11 flex-1 items-center justify-center rounded-2xl bg-cream-200 text-[12.5px] font-bold text-ink-400">
-                    Confirm payment to continue
-                  </span>
-                )
+                </div>
               ) : (
-                <span className="flex h-11 flex-1 items-center justify-center rounded-2xl bg-cream-200 text-[12.5px] font-bold text-ink-400">
-                  Order completed
-                </span>
+                <div className="flex items-center gap-2 w-full">
+                  {o.phone && (
+                    <a
+                      href={`https://wa.me/${o.phone.replace(/\D/g, "").replace(/^0/, "234")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Chat with ${o.customerName} on WhatsApp`}
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 transition-transform hover:scale-105 active:scale-95"
+                    >
+                      <WhatsAppIcon className="h-5 w-5" />
+                    </a>
+                  )}
+
+                  {!closed && (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmCancel(true)}
+                      className="flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-2xl bg-red-50 px-4 text-[12.5px] font-bold text-red-600 hover:bg-red-100"
+                    >
+                      <Ban className="h-4 w-4" />
+                      Cancel
+                    </button>
+                  )}
+
+                  {cancelled ? (
+                    <span className="flex h-11 flex-1 items-center justify-center rounded-2xl bg-red-50 text-[12.5px] font-bold text-red-600">
+                      Order cancelled
+                    </span>
+                  ) : next ? (
+                    verified ? (
+                      <button
+                        type="button"
+                        onClick={() => onAdvance(o.id, next.to)}
+                        className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-2xl bg-ink-900 text-[13.5px] font-bold text-white transition-all hover:bg-ink-700 active:scale-[0.98]"
+                      >
+                        {next.label}
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <span className="flex h-11 flex-1 items-center justify-center rounded-2xl bg-cream-200 text-[12.5px] font-bold text-ink-400">
+                        Confirm payment to continue
+                      </span>
+                    )
+                  ) : (
+                    <span className="flex h-11 flex-1 items-center justify-center rounded-2xl bg-cream-200 text-[12.5px] font-bold text-ink-400">
+                      Order completed
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </motion.div>
@@ -573,198 +818,138 @@ function OrderDetailsModal({
   );
 }
 
-function OrderCard({
+/**
+ * One order per row. Secondary columns drop away as the viewport narrows;
+ * everything they carried stays reachable through the details sheet, which
+ * is also where cancelling (and its reason) lives.
+ */
+function OrderRow({
   order: o,
   onAdvance,
   onVerify,
-  onCancel,
   onDetails,
+  onCancelRequest,
 }: {
   order: Order;
   onAdvance: (id: string, s: OrderStatus) => void;
   onVerify: (id: string) => void;
-  onCancel: (id: string) => void;
   onDetails: () => void;
+  onCancelRequest: () => void;
 }) {
-  const [confirmCancel, setConfirmCancel] = useState(false);
-  const next = NEXT[o.status];
-  const verified = !!o.paymentVerified;
-  const cancelled = o.status === "cancelled";
-  const closed = cancelled || o.status === "completed";
+  const itemCount = o.lines.reduce((n, l) => n + l.qty, 0);
+  // Past a week timeAgo() gives an absolute date, which would just repeat
+  // the line above it in the Placed column.
+  const relative = timeAgo(o.createdAt);
+  const isRelative = /ago|just now|yesterday/.test(relative);
+
+  const cell = "px-2.5 py-3 align-middle";
 
   return (
-    <motion.li
-      layout
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.97 }}
-      transition={{ type: "spring", stiffness: 380, damping: 32 }}
-      className="rounded-[24px] bg-white p-4 shadow-soft sm:p-5"
+    <motion.tr
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      className="border-b border-cream-200/70 last:border-0 hover:bg-cream-50/60"
     >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <p className="flex items-center gap-2 text-[14px] font-bold text-ink-900">
-          {o.customerName}
-          <span className="text-[12px] font-semibold text-ink-400">
-            {orderRef(o.id)}
+      <td className={cn(cell, "px-3 sm:px-4")}>
+        <button
+          type="button"
+          onClick={onDetails}
+          className="block max-w-[136px] text-left sm:max-w-none"
+        >
+          <span className="flex items-center gap-1.5">
+            <span className="truncate text-[13.5px] font-bold text-ink-900">
+              {o.customerName}
+            </span>
+            {o.note && (
+              <StickyNote
+                aria-label="Has a kitchen note"
+                className="h-3.5 w-3.5 shrink-0 text-amber-500"
+              />
+            )}
           </span>
-        </p>
-        <span className="ml-auto flex items-center gap-2">
-          {!cancelled &&
-            (verified ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800">
-                <Banknote className="h-3 w-3" />
-                Paid
-              </span>
-            ) : o.paymentConfirmed ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800">
-                <Banknote className="h-3 w-3" />
-                Transfer claimed
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-cream-200 px-2.5 py-1 text-[11px] font-bold text-ink-500">
-                <Banknote className="h-3 w-3" />
-                Unpaid
-              </span>
-            ))}
-          <StatusChip status={o.status} />
-        </span>
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] font-semibold text-ink-400">
-        <span className="flex items-center gap-1 capitalize">
-          {o.method === "delivery" ? (
-            <Bike className="h-3.5 w-3.5" />
-          ) : (
-            <Store className="h-3.5 w-3.5" />
-          )}
-          {o.method}
-        </span>
-        <span>
-          {shortDate(o.createdAt)} · {timeAgo(o.createdAt)}
-        </span>
-        {o.phone && <span>{o.phone}</span>}
-      </div>
-
-      <ul className="mt-3 flex flex-col gap-1 rounded-2xl bg-cream-100 p-3">
-        {o.lines.map((l, i) => (
-          <li
-            key={i}
-            className="flex items-baseline justify-between gap-3 text-[12.5px]"
-          >
-            <span className="font-semibold text-ink-700">
-              <span className="mr-1.5 font-bold text-brand-600">{l.qty}×</span>
-              {l.name}
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] font-semibold text-ink-400">
+            <span className="font-display tracking-wide text-brand-600">
+              {orderRef(o.id)}
             </span>
-            <span className="font-bold tabular-nums text-ink-500">
-              {naira(l.price * l.qty)}
+            <span className="flex items-center gap-1 capitalize">
+              {o.method === "delivery" ? (
+                <Bike className="h-3 w-3" />
+              ) : (
+                <Store className="h-3 w-3" />
+              )}
+              {o.method}
             </span>
-          </li>
-        ))}
-        {o.address && (
-          <li className="mt-1.5 border-t border-cream-300/70 pt-2 text-[12px] font-medium text-ink-500">
-            📍 {o.address}
-          </li>
-        )}
-        {o.note && (
-          <li className="flex items-start gap-1.5 pt-1 text-[12px] font-medium text-ink-500">
-            <StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-            {o.note}
-          </li>
-        )}
-      </ul>
+            {/* Stand-ins for the columns hidden at this width */}
+            <span className="md:hidden">{relative}</span>
+            <span className="lg:hidden">
+              {itemCount} {itemCount === 1 ? "item" : "items"}
+            </span>
+          </span>
+          <span className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">
+            <PaymentChip order={o} short />
+            <StatusChip status={o.status} />
+          </span>
+        </button>
+      </td>
 
-      {/* Payment gate: verify the transfer before working the order */}
-      {!verified && !closed && (
-        <div className="mt-3 rounded-2xl bg-amber-50 p-3.5 ring-1 ring-amber-200/70">
-          <p className="text-[12px] font-semibold leading-relaxed text-amber-900">
-            {o.paymentConfirmed
-              ? `Customer says they transferred ${naira(o.total)}. View the details, check your Moniepoint account, then confirm.`
-              : "No transfer claimed yet. Confirm you have received payment before preparing."}
-          </p>
-          <div className="mt-2.5 flex gap-2">
-            <button
-              type="button"
-              onClick={onDetails}
-              className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-white text-[12.5px] font-bold text-ink-700 shadow-soft transition-all hover:text-brand-600 active:scale-[0.98]"
-            >
-              <Eye className="h-4 w-4" />
-              View details
-            </button>
-            <button
-              type="button"
-              onClick={() => onVerify(o.id)}
-              className="flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-[12.5px] font-bold text-white transition-all hover:bg-emerald-500 active:scale-[0.98]"
-            >
-              <Check className="h-4 w-4" strokeWidth={3} />
-              Confirm payment
-            </button>
-          </div>
-        </div>
-      )}
+      <td className={cn(cell, "hidden whitespace-nowrap md:table-cell")}>
+        <span className="text-[12px] font-semibold text-ink-700">
+          {shortDate(o.createdAt)}
+        </span>
+        {isRelative && (
+          <span className="block text-[11px] font-medium text-ink-400">
+            {relative}
+          </span>
+        )}
+      </td>
 
-      <div className="mt-3.5 flex items-center gap-2">
-        <span className="font-display text-[16px] font-extrabold tabular-nums text-ink-900">
+      <td className={cn(cell, "hidden max-w-[210px] lg:table-cell")}>
+        <span className="text-[12px] font-semibold text-ink-700">
+          {itemCount} {itemCount === 1 ? "item" : "items"}
+        </span>
+        <span className="block truncate text-[11px] font-medium text-ink-400">
+          {o.lines.map((l) => `${l.qty}× ${l.name}`).join(", ")}
+        </span>
+      </td>
+
+      <td className={cn(cell, "whitespace-nowrap text-right")}>
+        <span className="font-display text-[14px] font-extrabold tabular-nums text-ink-900">
           {naira(o.total)}
         </span>
-        <div className="ml-auto flex items-center gap-2">
+      </td>
+
+      <td className={cn(cell, "hidden sm:table-cell")}>
+        <PaymentChip order={o} short />
+      </td>
+
+      <td className={cn(cell, "hidden sm:table-cell")}>
+        <StatusChip status={o.status} />
+      </td>
+
+      <td className={cn(cell, "px-3 sm:px-4")}>
+        <div className="flex items-center justify-end gap-1.5">
           <button
             type="button"
-            aria-label="View order details"
+            aria-label={`View details for order ${orderRef(o.id)}`}
             onClick={onDetails}
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-cream-100 text-ink-500 transition-colors hover:text-brand-600"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cream-100 text-ink-500 transition-colors hover:text-brand-600"
           >
             <Eye className="h-4 w-4" />
           </button>
-          {o.phone && (
-            <a
-              href={`https://wa.me/${o.phone.replace(/\D/g, "").replace(/^0/, "234")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Chat with ${o.customerName} on WhatsApp`}
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-transform hover:scale-105 active:scale-95"
-            >
-              <WhatsAppIcon className="h-4 w-4" />
-            </a>
+
+          {/* A cancelled order is terminal: the customer has been emailed. */}
+          {o.status !== "cancelled" && (
+            <StatusMenu
+              order={o}
+              onAdvance={onAdvance}
+              onVerify={onVerify}
+              onCancelRequest={onCancelRequest}
+            />
           )}
-          {!closed && (
-            <button
-              type="button"
-              onClick={() => {
-                if (!confirmCancel) {
-                  setConfirmCancel(true);
-                  setTimeout(() => setConfirmCancel(false), 3000);
-                  return;
-                }
-                onCancel(o.id);
-              }}
-              className={cn(
-                "flex h-9 items-center gap-1 rounded-xl px-3 text-[12px] font-bold transition-colors",
-                confirmCancel
-                  ? "bg-red-600 text-white"
-                  : "bg-cream-100 text-ink-400 hover:bg-red-50 hover:text-red-600"
-              )}
-            >
-              <Ban className="h-3.5 w-3.5" />
-              {confirmCancel ? "Sure?" : "Cancel"}
-            </button>
-          )}
-          {next &&
-            (verified ? (
-              <button
-                type="button"
-                onClick={() => onAdvance(o.id, next.to)}
-                className="flex h-9 items-center gap-1 rounded-xl bg-ink-900 px-3.5 text-[12px] font-bold text-white transition-all hover:bg-ink-700 active:scale-95"
-              >
-                {next.label}
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            ) : (
-              <span className="rounded-xl bg-cream-200 px-3.5 py-2 text-[11.5px] font-bold text-ink-400">
-                Confirm payment to continue
-              </span>
-            ))}
         </div>
-      </div>
-    </motion.li>
+      </td>
+    </motion.tr>
   );
 }

@@ -1,107 +1,92 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Search, SearchX, X } from "lucide-react";
 import FoodCard from "@/components/food/FoodCard";
 import SiteFooter from "@/components/blocks/SiteFooter";
 import Pagination from "@/components/Pagination";
-import { CATEGORIES, type MenuItem } from "@/lib/data";
+import { CATEGORIES } from "@/lib/data";
 import { useMenu } from "@/lib/store";
 import { cn } from "@/lib/cn";
 
-const RESULTS_PER_PAGE = 8;
+const PAGE_SIZE = 12;
+const CATEGORY_IDS = new Set<string>(CATEGORIES.map((c) => c.id));
 
 export default function MenuPage() {
   const items = useMenu((s) => s.items);
 
   const [query, setQuery] = useState("");
-  const [resultsPage, setResultsPage] = useState(1);
-  const [active, setActive] = useState<string>(CATEGORIES[0].id);
-  const pillRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const observing = useRef(true);
+  const [filter, setFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
 
-  const byCategory = useMemo(() => {
-    const map = new Map<string, MenuItem[]>();
-    for (const cat of CATEGORIES) {
-      map.set(
-        cat.id,
-        items.filter((i) => i.category === cat.id)
+  /* Extras are add-ons picked inside a dish, never sold on their own. */
+  const menuItems = useMemo(
+    () => items.filter((i) => CATEGORY_IDS.has(i.category)),
+    [items]
+  );
+
+  /* An empty category gets no filter to select. */
+  const activeCategories = useMemo(
+    () => CATEGORIES.filter((c) => menuItems.some((i) => i.category === c.id)),
+    [menuItems]
+  );
+
+  const searching = query.trim().length > 0;
+
+  /* Searching looks across the whole menu; otherwise the pills narrow it. */
+  const list = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q) {
+      return menuItems.filter(
+        (i) =>
+          i.name.toLowerCase().includes(q) ||
+          i.description?.toLowerCase().includes(q)
       );
     }
-    return map;
-  }, [items]);
+    return filter === "all"
+      ? menuItems
+      : menuItems.filter((i) => i.category === filter);
+  }, [query, filter, menuItems]);
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return null;
-    return items.filter(
-      (i) =>
-        i.name.toLowerCase().includes(q) ||
-        i.description?.toLowerCase().includes(q)
-    );
-  }, [query, items]);
+  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  const paged = list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  /* Reset to the first page of results whenever the query changes. */
+  /* A shorter list would otherwise leave the reader on a page that no
+     longer exists. */
   useEffect(() => {
-    setResultsPage(1);
-  }, [query]);
+    setPage(1);
+  }, [query, filter]);
 
-  const resultsTotalPages = results
-    ? Math.max(1, Math.ceil(results.length / RESULTS_PER_PAGE))
-    : 1;
-  const pagedResults = results
-    ? results.slice(
-        (resultsPage - 1) * RESULTS_PER_PAGE,
-        resultsPage * RESULTS_PER_PAGE
-      )
-    : [];
-
-  /* Deep-link (#category) support */
+  /* Don't strand the filter on a category that has emptied out. */
   useEffect(() => {
-    const hash = window.location.hash.slice(1);
-    if (!hash) return;
-    const el = document.getElementById(hash);
-    if (el) {
-      setTimeout(() => el.scrollIntoView({ behavior: "smooth" }), 150);
+    if (activeCategories.length === 0) return;
+    if (filter !== "all" && !activeCategories.some((c) => c.id === filter)) {
+      setFilter("all");
     }
+  }, [activeCategories, filter]);
+
+  /* Deep links from the home page, e.g. /menu#burgers, pick the filter.
+     A hash-only change never remounts, so listen for it as well. */
+  useEffect(() => {
+    const apply = () => {
+      const hash = window.location.hash.slice(1);
+      if (hash && CATEGORY_IDS.has(hash)) setFilter(hash);
+    };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
   }, []);
 
-  /* Scroll-spy for the sticky pills */
-  useEffect(() => {
-    if (results) return;
-    const sections = CATEGORIES.map((c) => c.id)
-      .map((id) => document.getElementById(id))
-      .filter((el): el is HTMLElement => !!el);
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (!observing.current) return;
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible[0]) {
-          const id = visible[0].target.id;
-          setActive(id);
-          pillRefs.current[id]?.scrollIntoView({
-            behavior: "smooth",
-            inline: "center",
-            block: "nearest",
-          });
-        }
-      },
-      { rootMargin: "-25% 0px -60% 0px" }
-    );
-    sections.forEach((s) => io.observe(s));
-    return () => io.disconnect();
-  }, [results]);
-
-  const jumpTo = (id: string) => {
-    setActive(id);
-    observing.current = false;
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
-    setTimeout(() => (observing.current = true), 900);
+  const goToPage = (next: number) => {
+    setPage(next);
+    document
+      .getElementById("browse")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  const pill =
+    "relative shrink-0 grow rounded-2xl px-3.5 py-2 text-[12.5px] font-bold transition-colors duration-200";
 
   return (
     <div className="mx-auto max-w-[1020px] px-4 sm:px-6 lg:px-8">
@@ -136,111 +121,101 @@ export default function MenuPage() {
         </div>
       </header>
 
-      {/* ── Search results ────────────────────────────────────── */}
-      {results ? (
-        <section className="mt-6 pb-10">
-          {results.length === 0 ? (
-            <div className="flex flex-col items-center py-16 text-center">
-              <span className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-cream-200 text-ink-400">
-                <SearchX className="h-7 w-7" />
-              </span>
-              <p className="mt-4 text-[15px] font-bold text-ink-900">
-                Nothing found for “{query}”
-              </p>
-              <p className="mt-1 text-[13px] text-ink-500">
-                Try “samosa”, “burger” or “milk tea”.
-              </p>
-            </div>
-          ) : (
-            <>
-              <p className="mb-4 text-[13px] font-semibold text-ink-500">
-                {results.length} result{results.length === 1 ? "" : "s"}
-              </p>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                {pagedResults.map((item, i) => (
-                  <FoodCard key={item.id} item={item} index={i} />
-                ))}
-              </div>
-              <Pagination
-                page={resultsPage}
-                totalPages={resultsTotalPages}
-                total={results.length}
-                limit={RESULTS_PER_PAGE}
-                onPage={setResultsPage}
-              />
-            </>
-          )}
-        </section>
-      ) : (
-        <>
-          {/* ── Sticky category pills ─────────────────────────── */}
-          <div
-            id="browse"
-            className="sticky top-0 z-30 -mx-4 mt-4 px-4 pb-2 pt-2 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
-          >
-            <div className="glass-strong no-scrollbar flex gap-1.5 overflow-x-auto rounded-[22px] p-1.5 shadow-soft">
-              {CATEGORIES.map(
-                (c) => {
-                  const isActive = active === c.id;
-                  return (
-                    <button
-                      key={c.id}
-                      ref={(el) => {
-                        pillRefs.current[c.id] = el;
-                      }}
-                      type="button"
-                      onClick={() => jumpTo(c.id)}
-                      className={cn(
-                        "relative shrink-0 rounded-2xl px-3.5 py-2 text-[12.5px] font-bold transition-colors duration-200",
-                        isActive ? "text-white" : "text-ink-500 hover:text-ink-900"
-                      )}
-                    >
-                      {isActive && (
-                        <motion.span
-                          layoutId="menu-pill"
-                          className="absolute inset-0 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 shadow-pink"
-                          transition={{ type: "spring", stiffness: 480, damping: 38 }}
-                        />
-                      )}
-                      <span className="relative z-10">
-                        <span aria-hidden className="mr-1">{c.emoji}</span>
-                        {c.label}
-                      </span>
-                    </button>
-                  );
-                }
+      {/* ── Category filters ──────────────────────────────────── */}
+      {!searching && (
+        <div
+          id="browse"
+          className="sticky top-0 z-30 -mx-4 mt-4 px-4 pb-2 pt-2 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
+        >
+          <div className="glass-strong no-scrollbar flex gap-1.5 overflow-x-auto rounded-[22px] p-1.5 shadow-soft">
+            <button
+              type="button"
+              onClick={() => setFilter("all")}
+              className={cn(
+                pill,
+                filter === "all"
+                  ? "text-white"
+                  : "text-ink-500 hover:text-ink-900"
               )}
-            </div>
-          </div>
+            >
+              {filter === "all" && (
+                <motion.span
+                  layoutId="menu-pill"
+                  className="absolute inset-0 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 shadow-pink"
+                  transition={{ type: "spring", stiffness: 480, damping: 38 }}
+                />
+              )}
+              <span className="relative z-10">All</span>
+            </button>
 
-          {/* ── Category sections ─────────────────────────────── */}
-          <div className="mt-4 flex flex-col gap-10 pb-4">
-            {CATEGORIES.map((cat) => {
-              const catItems = byCategory.get(cat.id) ?? [];
-              if (catItems.length === 0) return null;
+            {activeCategories.map((c) => {
+              const isActive = filter === c.id;
               return (
-                <section key={cat.id} id={cat.id} className="scroll-mt-24">
-                  <div className="mb-3.5 flex items-baseline gap-2">
-                    <h2 className="font-display text-[19px] font-extrabold tracking-tight text-ink-900 lg:text-[22px]">
-                      <span aria-hidden className="mr-1.5">{cat.emoji}</span>
-                      {cat.label}
-                    </h2>
-                    <span className="text-[12px] font-bold text-ink-400">
-                      {catItems.length} item{catItems.length === 1 ? "" : "s"}
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setFilter(c.id)}
+                  className={cn(
+                    pill,
+                    isActive ? "text-white" : "text-ink-500 hover:text-ink-900"
+                  )}
+                >
+                  {isActive && (
+                    <motion.span
+                      layoutId="menu-pill"
+                      className="absolute inset-0 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 shadow-pink"
+                      transition={{ type: "spring", stiffness: 480, damping: 38 }}
+                    />
+                  )}
+                  <span className="relative z-10">
+                    <span aria-hidden className="mr-1">
+                      {c.emoji}
                     </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                    {catItems.map((item, i) => (
-                      <FoodCard key={item.id} item={item} index={i} />
-                    ))}
-                  </div>
-                </section>
+                    {c.label}
+                  </span>
+                </button>
               );
             })}
-
           </div>
-        </>
+        </div>
       )}
+
+      {/* ── Items ─────────────────────────────────────────────── */}
+      <section className={cn("pb-4", searching ? "mt-6" : "mt-4")}>
+        {list.length === 0 ? (
+          <div className="flex flex-col items-center py-16 text-center">
+            <span className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-cream-200 text-ink-400">
+              <SearchX className="h-7 w-7" />
+            </span>
+            <p className="mt-4 text-[15px] font-bold text-ink-900">
+              {searching ? `Nothing found for “${query}”` : "Nothing on the menu yet"}
+            </p>
+            <p className="mt-1 text-[13px] text-ink-500">
+              {searching
+                ? "Try “samosa”, “burger” or “milk tea”."
+                : "Check back shortly, the kitchen is restocking."}
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="mb-4 text-[13px] font-semibold text-ink-500">
+              {list.length} item{list.length === 1 ? "" : "s"}
+            </p>
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              {paged.map((item, i) => (
+                <FoodCard key={item.id} item={item} index={i} />
+              ))}
+            </div>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={list.length}
+              limit={PAGE_SIZE}
+              onPage={goToPage}
+            />
+          </>
+        )}
+      </section>
 
       <div className="mt-10">
         <SiteFooter />

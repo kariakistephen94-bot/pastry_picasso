@@ -59,6 +59,15 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
       setError("Please add your name so we know who's ordering.");
       return;
     }
+    if (!profile.email.trim()) {
+      setError("Please add your email so we can send your receipt and tracking ID.");
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(profile.email.trim())) {
+      setError("Please enter a valid email address.");
+      return;
+    }
     if (method === "delivery" && !profile.address.trim()) {
       setError("Please add a delivery address.");
       return;
@@ -77,6 +86,7 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
     try {
       await saveProfile({
         name: profile.name.trim(),
+        email: profile.email.trim(),
         phone: profile.phone.trim(),
         address: method === "delivery" ? profile.address.trim() : profile.address,
       });
@@ -87,6 +97,7 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
     try {
       const order = await placeOrder({
         customerName: profile.name.trim(),
+        email: profile.email.trim(),
         phone: profile.phone.trim() || undefined,
         method,
         address: method === "delivery" ? profile.address.trim() : undefined,
@@ -339,6 +350,13 @@ export default function CartView({ variant }: { variant: "panel" | "page" }) {
           placeholder="Your name *"
           value={profile.name}
           onChange={(e) => setProfile({ name: e.target.value })}
+        />
+        <input
+          className={field}
+          type="email"
+          placeholder="Email address * (for tracking receipt)"
+          value={profile.email}
+          onChange={(e) => setProfile({ email: e.target.value })}
         />
         <input
           className={field}

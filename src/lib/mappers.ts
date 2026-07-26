@@ -70,10 +70,12 @@ export interface OrderLine {
 export interface Order {
   id: string;
   customerName: string;
+  email?: string;
   phone?: string;
   method: "pickup" | "delivery";
   address?: string;
   note?: string;
+  cancelNote?: string;
   lines: OrderLine[];
   total: number;
   status: OrderStatus;
@@ -88,10 +90,12 @@ export function orderRowToOrder(o: any): Order {
   return {
     id: o.id,
     customerName: o.customer_name,
+    email: o.email || undefined,
     phone: o.phone || undefined,
     method: o.method,
     address: o.address || undefined,
     note: o.note || undefined,
+    cancelNote: o.cancel_note || undefined,
     total: o.total,
     status: o.status,
     createdAt: Number(o.created_at),

@@ -1,5 +1,6 @@
 import { admin, ok, fail, guard, currentUser } from "@/lib/api-server";
 import { orderRowToOrder } from "@/lib/mappers";
+import { sendOrderPlacedEmail } from "@/lib/resend";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export async function POST(req: Request) {
     if (!body) return fail("Invalid request body.");
 
     const customerName = String(body.customerName ?? "").trim();
+    const email = body.email ? String(body.email).trim() : null;
     const method = body.method === "pickup" ? "pickup" : "delivery";
     const phone = body.phone ? String(body.phone).trim() : null;
     const address = body.address ? String(body.address).trim() : null;
@@ -35,6 +37,9 @@ export async function POST(req: Request) {
     const items: IncomingItem[] = Array.isArray(body.items) ? body.items : [];
 
     if (!customerName) return fail("A customer name is required.");
+    if (!email) return fail("An email address is required.");
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return fail("Please enter a valid email address.");
     if (method === "delivery" && !address)
       return fail("A delivery address is required.");
     if (items.length === 0) return fail("Your cart is empty.");
@@ -91,6 +96,7 @@ export async function POST(req: Request) {
     const { error: orderErr } = await db.from("orders").insert({
       id,
       customer_name: customerName,
+      email,
       phone,
       method,
       address: method === "delivery" ? address : null,
@@ -116,6 +122,7 @@ export async function POST(req: Request) {
     const order = orderRowToOrder({
       id,
       customer_name: customerName,
+      email,
       phone,
       method,
       address,
@@ -126,6 +133,10 @@ export async function POST(req: Request) {
       payment_verified: false,
       created_at: createdAt,
       order_items: lines,
+    });
+
+    sendOrderPlacedEmail(order).catch((err) => {
+      console.error("Failed to send order placed email:", err);
     });
 
     return ok({ order }, 201);
