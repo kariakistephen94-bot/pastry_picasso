@@ -171,8 +171,8 @@ export default function AdminOverview() {
       </div>
 
       {/* Charts */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-        <div className="rounded-[24px] bg-white p-5 shadow-soft">
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        <div className="min-w-0 rounded-[24px] bg-white p-5 shadow-soft">
           <div className="mb-5 flex items-baseline justify-between">
             <h2 className="font-display text-[15.5px] font-extrabold text-ink-900">
               Revenue · {stats?.rangeLabel ?? short}
@@ -184,7 +184,7 @@ export default function AdminOverview() {
           <RevenueBars days={stats?.series ?? []} />
         </div>
 
-        <div className="rounded-[24px] bg-white p-5 shadow-soft">
+        <div className="min-w-0 rounded-[24px] bg-white p-5 shadow-soft">
           <h2 className="mb-5 font-display text-[15.5px] font-extrabold text-ink-900">
             Top sellers · {short}
           </h2>

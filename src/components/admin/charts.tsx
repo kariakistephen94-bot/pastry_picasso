@@ -28,6 +28,7 @@ export function RevenueBars({ days }: { days: DayPoint[] }) {
   return (
     <div
       role="img"
+      className="min-w-0"
       aria-label={`Revenue: ${days
         .map((d) => `${d.label} ${naira(d.value)}`)
         .join(", ")}`}
