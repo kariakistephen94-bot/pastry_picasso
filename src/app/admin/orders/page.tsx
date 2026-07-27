@@ -13,6 +13,7 @@ import {
   Eye,
   Inbox,
   ReceiptText,
+  RotateCcw,
   StickyNote,
   Store,
   Timer,
@@ -69,6 +70,8 @@ export default function AdminOrders() {
   const [detailsId, setDetailsId] = useState<string | null>(null);
   /* Cancelling from the row opens the sheet straight onto its note form. */
   const [startCancel, setStartCancel] = useState(false);
+  /* Same idea for revoking a cancellation, which needs a target status. */
+  const [startReinstate, setStartReinstate] = useState(false);
 
   const load = useCallback(
     async (silent = false) => {
@@ -147,6 +150,22 @@ export default function AdminOrders() {
       );
     } catch (err) {
       console.error("Failed to cancel order:", err);
+    }
+    load(true);
+  };
+
+  /* Revoking a cancellation. The server clears the cancellation note and
+     emails the customer, so the optimistic row must drop the note too. */
+  const reinstate = async (id: string, status: OrderStatus) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === id ? { ...o, status, cancelNote: undefined } : o
+      )
+    );
+    try {
+      await api.patch(`/api/admin/orders/${id}`, { status }, { auth: true });
+    } catch (err) {
+      console.error("Failed to reinstate order:", err);
     }
     load(true);
   };
@@ -320,6 +339,10 @@ export default function AdminOrders() {
                       setStartCancel(true);
                       setDetailsId(o.id);
                     }}
+                    onReinstateRequest={() => {
+                      setStartReinstate(true);
+                      setDetailsId(o.id);
+                    }}
                   />
                 ))}
               </AnimatePresence>
@@ -339,13 +362,16 @@ export default function AdminOrders() {
       <OrderDetailsModal
         order={detailsOrder}
         initialCancel={startCancel}
+        initialReinstate={startReinstate}
         onClose={() => {
           setDetailsId(null);
           setStartCancel(false);
+          setStartReinstate(false);
         }}
         onAdvance={advance}
         onVerify={verify}
         onCancel={cancel}
+        onReinstate={reinstate}
       />
     </div>
   );
@@ -360,11 +386,13 @@ function StatusMenu({
   onAdvance,
   onVerify,
   onCancelRequest,
+  onReinstateRequest,
 }: {
   order: Order;
   onAdvance: (id: string, s: OrderStatus) => void;
   onVerify: (id: string) => void;
   onCancelRequest: () => void;
+  onReinstateRequest: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
@@ -372,6 +400,7 @@ function StatusMenu({
 
   const verified = !!o.paymentVerified;
   const completed = o.status === "completed";
+  const cancelled = o.status === "cancelled";
 
   useEffect(() => {
     if (!open) return;
@@ -428,7 +457,27 @@ function StatusMenu({
               style={{ top: pos.top, right: pos.right }}
               className="fixed z-[81] w-[216px] overflow-hidden rounded-2xl bg-white py-1 shadow-float ring-1 ring-cream-200"
             >
-              {!verified && (
+              {cancelled && (
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setOpen(false);
+                      onReinstateRequest();
+                    }}
+                    className={cn(item, "text-emerald-700 hover:bg-emerald-50")}
+                  >
+                    <RotateCcw className="h-4 w-4 shrink-0" strokeWidth={2.6} />
+                    Revoke cancellation…
+                  </button>
+                  <p className="border-t border-cream-200 bg-cream-50 px-3 py-2 text-[11px] font-semibold leading-snug text-ink-400">
+                    Puts the order back in the kitchen and emails the customer.
+                  </p>
+                </>
+              )}
+
+              {!cancelled && !verified && (
                 <>
                   <button
                     type="button"
@@ -448,7 +497,8 @@ function StatusMenu({
                 </>
               )}
 
-              {WORKFLOW.map((s) => {
+              {!cancelled &&
+                WORKFLOW.map((s) => {
                 const current = s === o.status;
                 return (
                   <button
@@ -479,7 +529,7 @@ function StatusMenu({
                 );
               })}
 
-              {!completed && (
+              {!cancelled && !completed && (
                 <>
                   <div className="my-1 border-t border-cream-200" />
                   <button
@@ -542,22 +592,29 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 function OrderDetailsModal({
   order: o,
   initialCancel,
+  initialReinstate,
   onClose,
   onAdvance,
   onVerify,
   onCancel,
+  onReinstate,
 }: {
   order: Order | null;
   /** Open straight onto the cancellation note, e.g. from the row menu. */
   initialCancel?: boolean;
+  /** Open straight onto the reinstatement picker, e.g. from the row menu. */
+  initialReinstate?: boolean;
   onClose: () => void;
   onAdvance: (id: string, s: OrderStatus) => void;
   onVerify: (id: string) => void;
   onCancel: (id: string, reason: string) => void;
+  onReinstate: (id: string, status: OrderStatus) => void;
 }) {
   useLockBody(!!o);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [confirmReinstate, setConfirmReinstate] = useState(false);
+  const [reinstateTo, setReinstateTo] = useState<OrderStatus | null>(null);
 
   /* Keyed on the id, not the object: a background refresh swaps in a new
      order object, and that must not wipe a half-typed cancellation note. */
@@ -565,11 +622,14 @@ function OrderDetailsModal({
   useEffect(() => {
     if (orderId) {
       setConfirmCancel(!!initialCancel);
+      setConfirmReinstate(!!initialReinstate);
     } else {
       setConfirmCancel(false);
       setCancelReason("");
+      setConfirmReinstate(false);
+      setReinstateTo(null);
     }
-  }, [orderId, initialCancel]);
+  }, [orderId, initialCancel, initialReinstate]);
 
   const next = o ? NEXT[o.status] : undefined;
   const verified = !!o?.paymentVerified;
@@ -748,7 +808,60 @@ function OrderDetailsModal({
 
             {/* Footer actions */}
             <div className="flex flex-col gap-3 border-t border-cream-200 bg-cream-50/95 px-5 py-3.5 pb-safe backdrop-blur">
-              {confirmCancel && !closed ? (
+              {confirmReinstate && cancelled ? (
+                <div className="flex w-full flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[12px] font-bold text-emerald-700">
+                      Reinstate as (customer is notified)
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConfirmReinstate(false);
+                        setReinstateTo(null);
+                      }}
+                      className="text-[11px] font-bold text-ink-400 hover:text-ink-600"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {WORKFLOW.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setReinstateTo(s)}
+                        className={cn(
+                          "flex h-9 items-center justify-center rounded-xl text-[12px] font-bold transition-colors",
+                          reinstateTo === s
+                            ? "bg-ink-900 text-white shadow-card"
+                            : "bg-white text-ink-600 ring-1 ring-cream-300 hover:text-ink-900"
+                        )}
+                      >
+                        {STATUS_LABEL[s]}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!reinstateTo}
+                    onClick={() => {
+                      if (!reinstateTo) return;
+                      onReinstate(o.id, reinstateTo);
+                      onClose();
+                    }}
+                    className={cn(
+                      "flex h-10 w-full items-center justify-center gap-1.5 rounded-xl text-[12.5px] font-bold text-white transition-all",
+                      reinstateTo
+                        ? "bg-emerald-600 hover:bg-emerald-500"
+                        : "cursor-not-allowed bg-ink-300"
+                    )}
+                  >
+                    <RotateCcw className="h-4 w-4" strokeWidth={2.6} />
+                    Confirm reinstatement
+                  </button>
+                </div>
+              ) : confirmCancel && !closed ? (
                 <div className="flex flex-col gap-2 w-full">
                   <div className="flex items-center justify-between">
                     <p className="text-[12px] font-bold text-red-700">Cancel Reason (sent to customer)</p>
@@ -813,9 +926,14 @@ function OrderDetailsModal({
                   )}
 
                   {cancelled ? (
-                    <span className="flex h-11 flex-1 items-center justify-center rounded-2xl bg-red-50 text-[12.5px] font-bold text-red-600">
-                      Order cancelled
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmReinstate(true)}
+                      className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-2xl bg-emerald-600 text-[13px] font-bold text-white transition-all hover:bg-emerald-500 active:scale-[0.98]"
+                    >
+                      <RotateCcw className="h-4 w-4" strokeWidth={2.6} />
+                      Revoke cancellation
+                    </button>
                   ) : next ? (
                     verified ? (
                       <button
@@ -857,12 +975,14 @@ function OrderRow({
   onVerify,
   onDetails,
   onCancelRequest,
+  onReinstateRequest,
 }: {
   order: Order;
   onAdvance: (id: string, s: OrderStatus) => void;
   onVerify: (id: string) => void;
   onDetails: () => void;
   onCancelRequest: () => void;
+  onReinstateRequest: () => void;
 }) {
   // A row joined with no order_items (or a partially written order) has no
   // usable lines; treat it as an empty basket rather than crashing the table.
@@ -972,15 +1092,15 @@ function OrderRow({
             <Eye className="h-4 w-4" />
           </button>
 
-          {/* A cancelled order is terminal: the customer has been emailed. */}
-          {o.status !== "cancelled" && (
-            <StatusMenu
-              order={o}
-              onAdvance={onAdvance}
-              onVerify={onVerify}
-              onCancelRequest={onCancelRequest}
-            />
-          )}
+          {/* A cancelled order offers only one move: revoking the
+              cancellation, which re-notifies the customer. */}
+          <StatusMenu
+            order={o}
+            onAdvance={onAdvance}
+            onVerify={onVerify}
+            onCancelRequest={onCancelRequest}
+            onReinstateRequest={onReinstateRequest}
+          />
         </div>
       </td>
     </motion.tr>

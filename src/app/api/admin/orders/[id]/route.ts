@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { admin, ok, fail, guard, requireAdmin } from "@/lib/api-server";
 import { orderRowToOrder } from "@/lib/mappers";
-import { sendPaymentConfirmedEmail, sendOrderCancelledEmail } from "@/lib/resend";
+import {
+  sendPaymentConfirmedEmail,
+  sendOrderCancelledEmail,
+  sendOrderReinstatedEmail,
+} from "@/lib/resend";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +39,9 @@ export async function PATCH(
 
     const patch: Record<string, unknown> = {};
     let cancelNote = "";
+    // Moving off "cancelled" revokes the cancellation rather than being an
+    // ordinary status step, so it clears the note and notifies the customer.
+    let reinstated = false;
 
     if (body.status !== undefined) {
       if (!STATUSES.includes(body.status)) return fail("Invalid status.");
@@ -46,6 +53,9 @@ export async function PATCH(
           return fail("A cancellation note is required for the customer.");
         }
         patch.cancel_note = cancelNote;
+      } else if (oldOrder.status === "cancelled") {
+        reinstated = true;
+        patch.cancel_note = null;
       }
     }
     if (body.paymentVerified !== undefined) {
@@ -61,7 +71,14 @@ export async function PATCH(
       ...oldOrder,
       status: (patch.status as any) ?? oldOrder.status,
       paymentVerified: (patch.payment_verified as boolean) ?? oldOrder.paymentVerified,
+      cancelNote: reinstated ? undefined : oldOrder.cancelNote,
     };
+
+    if (reinstated) {
+      sendOrderReinstatedEmail(updatedOrder).catch((err) => {
+        console.error("Failed to send order reinstated email:", err);
+      });
+    }
 
     if (patch.payment_verified === true && !oldOrder.paymentVerified) {
       sendPaymentConfirmedEmail(updatedOrder).catch((err) => {

@@ -343,3 +343,40 @@ export async function sendOrderCancelledEmail(order: Order, cancelNote: string) 
     html,
   });
 }
+
+/**
+ * Notify the customer that a cancellation has been revoked and their order is
+ * live again. They have already had the cancellation email, so silence here
+ * would leave them holding a notice that is no longer true.
+ */
+export async function sendOrderReinstatedEmail(order: Order) {
+  if (!order.email) return;
+
+  const trackingRef = orderRef(order.id);
+  const trackLink = `${APP_URL}/track?id=${trackingRef}`;
+
+  const html = emailWrapper(
+    "Order Update: Reinstated",
+    `
+    <p style="font-size: 15px; font-weight: 700; color: #1e1e24; margin-top: 0;">Hello ${order.customerName},</p>
+    <p>Good news! Your order <strong>${trackingRef}</strong> is no longer cancelled. We have reinstated it and it is back with our kitchen team.</p>
+
+    <div style="background-color: #ebfaf0; border: 1px solid #c3f0d2; border-radius: 12px; padding: 14px; margin: 20px 0; font-size: 13px; color: #1f6b3a; font-weight: 700;">
+      ✓ Cancellation revoked. Please disregard the earlier cancellation email.
+    </div>
+
+    <h3 style="margin-top: 24px; font-size: 14px; font-weight: 700; color: #1e1e24;">Order Summary (${trackingRef})</h3>
+    ${itemsTable(order.lines, order.total)}
+
+    <p>If you no longer want this order, or anything looks wrong, please reach us on WhatsApp and we will sort it out straight away.</p>
+
+    <a href="${trackLink}" class="cta-btn">Track Order Live</a>
+  `
+  );
+
+  await sendEmail({
+    to: order.email,
+    subject: `✅ Order Reinstated - ${trackingRef} is back on`,
+    html,
+  });
+}
