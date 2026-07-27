@@ -9,12 +9,16 @@ const STYLES: Record<OrderStatus, { label: string; cls: string; dot: string }> =
   cancelled: { label: "Cancelled", cls: "bg-red-100 text-red-700", dot: "bg-red-500" },
 };
 
+/* The status column is free text in the database, so a row can carry a value
+   this map has never heard of. Render it plainly instead of throwing. */
+const UNKNOWN = { label: "Unknown", cls: "bg-cream-200 text-ink-500", dot: "bg-ink-400" };
+
 export const STATUS_LABEL = Object.fromEntries(
   Object.entries(STYLES).map(([k, v]) => [k, v.label])
 ) as Record<OrderStatus, string>;
 
 export default function StatusChip({ status }: { status: OrderStatus }) {
-  const s = STYLES[status];
+  const s = STYLES[status] ?? { ...UNKNOWN, label: status || UNKNOWN.label };
   return (
     <span
       className={cn(

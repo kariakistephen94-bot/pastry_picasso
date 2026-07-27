@@ -65,6 +65,7 @@ export default function AdminOrders() {
   const [filter, setFilter] = useState<OrderStatus | "all">("all");
   const [sort, setSort] = useState("recent");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [detailsId, setDetailsId] = useState<string | null>(null);
   /* Cancelling from the row opens the sheet straight onto its note form. */
   const [startCancel, setStartCancel] = useState(false);
@@ -83,13 +84,19 @@ export default function AdminOrders() {
           `/api/admin/orders?page=${page}&limit=${PAGE_SIZE}&status=${filter}&sort=${sort}`,
           { auth: true }
         );
-        setOrders(res.data);
-        setTotal(res.total);
-        setTotalPages(res.totalPages);
-        setCounts(res.counts);
+        // Defensive: a truncated or unexpected payload must not leave state
+        // holding a non-array/undefined that the render path then walks.
+        setOrders(Array.isArray(res.data) ? res.data.filter(Boolean) : []);
+        setTotal(res.total ?? 0);
+        setTotalPages(res.totalPages ?? 1);
+        setCounts(res.counts ?? {});
         setRevenue(res.revenue ?? 0);
+        setError(null);
       } catch (err) {
         console.error("Failed to load orders:", err);
+        setError(
+          err instanceof Error ? err.message : "Could not load orders."
+        );
       } finally {
         setLoading(false);
       }
@@ -257,6 +264,23 @@ export default function AdminOrders() {
         <p className="animate-pulse py-12 text-center text-[13px] font-semibold text-ink-400">
           Loading orders…
         </p>
+      ) : error && orders.length === 0 ? (
+        <div className="flex flex-col items-center rounded-[24px] bg-white px-6 py-16 text-center shadow-soft">
+          <span className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-red-50 text-red-500">
+            <Ban className="h-7 w-7" />
+          </span>
+          <p className="mt-4 text-[14.5px] font-bold text-ink-900">
+            Could not load orders
+          </p>
+          <p className="mt-1 max-w-[320px] text-[12.5px] text-ink-500">{error}</p>
+          <button
+            type="button"
+            onClick={() => load()}
+            className="mt-4 flex h-10 items-center justify-center rounded-xl bg-ink-900 px-5 text-[12.5px] font-bold text-white transition-all hover:bg-ink-700 active:scale-95"
+          >
+            Try again
+          </button>
+        </div>
       ) : orders.length === 0 ? (
         <div className="flex flex-col items-center rounded-[24px] bg-white px-6 py-16 text-center shadow-soft">
           <span className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-cream-200 text-ink-400">
@@ -626,10 +650,14 @@ function OrderDetailsModal({
                 {o.note && <DetailRow label="Note" value={o.note} />}
                 <DetailRow
                   label="Placed"
-                  value={new Date(o.createdAt).toLocaleString("en-NG", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
+                  value={
+                    Number.isFinite(Number(o.createdAt))
+                      ? new Date(Number(o.createdAt)).toLocaleString("en-NG", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })
+                      : "—"
+                  }
                 />
               </div>
 
@@ -638,7 +666,7 @@ function OrderDetailsModal({
                 Order
               </p>
               <div className="rounded-2xl bg-white p-4 shadow-soft">
-                {o.lines.map((l, i) => (
+                {(Array.isArray(o.lines) ? o.lines : []).map((l, i) => (
                   <div
                     key={i}
                     className={cn(
@@ -648,12 +676,12 @@ function OrderDetailsModal({
                   >
                     <span className="font-semibold text-ink-700">
                       <span className="mr-1.5 font-bold text-brand-600">
-                        {l.qty}×
+                        {Number(l?.qty) || 0}×
                       </span>
-                      {l.name}
+                      {l?.name ?? "Item"}
                     </span>
                     <span className="shrink-0 font-bold tabular-nums text-ink-500">
-                      {naira(l.price * l.qty)}
+                      {naira((Number(l?.price) || 0) * (Number(l?.qty) || 0))}
                     </span>
                   </div>
                 ))}
@@ -836,7 +864,10 @@ function OrderRow({
   onDetails: () => void;
   onCancelRequest: () => void;
 }) {
-  const itemCount = o.lines.reduce((n, l) => n + l.qty, 0);
+  // A row joined with no order_items (or a partially written order) has no
+  // usable lines; treat it as an empty basket rather than crashing the table.
+  const lines = Array.isArray(o.lines) ? o.lines : [];
+  const itemCount = lines.reduce((n, l) => n + (Number(l?.qty) || 0), 0);
   // Past a week timeAgo() gives an absolute date, which would just repeat
   // the line above it in the Placed column.
   const relative = timeAgo(o.createdAt);
@@ -910,7 +941,9 @@ function OrderRow({
           {itemCount} {itemCount === 1 ? "item" : "items"}
         </span>
         <span className="block truncate text-[11px] font-medium text-ink-400">
-          {o.lines.map((l) => `${l.qty}× ${l.name}`).join(", ")}
+          {lines
+            .map((l) => `${Number(l?.qty) || 0}× ${l?.name ?? "Item"}`)
+            .join(", ")}
         </span>
       </td>
 

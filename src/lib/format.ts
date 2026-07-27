@@ -1,9 +1,15 @@
-export function naira(amount: number): string {
-  return `₦${amount.toLocaleString("en-NG")}`;
+/* Every formatter below is fed straight from API rows, so each one tolerates a
+   missing or malformed value rather than throwing. A single bad column must
+   never take down the screen rendering it. */
+
+export function naira(amount: number | null | undefined): string {
+  const n = Number(amount);
+  return `₦${(Number.isFinite(n) ? n : 0).toLocaleString("en-NG")}`;
 }
 
-export function timeAgo(ts: number): string {
-  const diff = Date.now() - ts;
+export function timeAgo(ts: number | null | undefined): string {
+  if (!Number.isFinite(Number(ts))) return "—";
+  const diff = Date.now() - Number(ts);
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
@@ -12,14 +18,15 @@ export function timeAgo(ts: number): string {
   const days = Math.floor(hours / 24);
   if (days === 1) return "yesterday";
   if (days < 7) return `${days}d ago`;
-  return new Date(ts).toLocaleDateString("en-NG", {
+  return new Date(Number(ts)).toLocaleDateString("en-NG", {
     day: "numeric",
     month: "short",
   });
 }
 
-export function shortDate(ts: number): string {
-  return new Date(ts).toLocaleDateString("en-NG", {
+export function shortDate(ts: number | null | undefined): string {
+  if (!Number.isFinite(Number(ts))) return "—";
+  return new Date(Number(ts)).toLocaleDateString("en-NG", {
     weekday: "short",
     day: "numeric",
     month: "short",
