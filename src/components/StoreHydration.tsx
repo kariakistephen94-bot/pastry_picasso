@@ -17,12 +17,17 @@ const generateUUID = () => {
 
 export default function StoreHydration() {
   useEffect(() => {
-    // Force-clear browser local storage once to ensure clean slate with Supabase migration
+    /* One-time purge of pre-Supabase local data.
+       Scoped to our own keys: a blanket localStorage.clear() also destroyed the
+       Supabase auth token (sb-*-auth-token), silently signing admins out. And
+       the reload it triggered fired for every fresh browser, not just ones
+       holding stale data, costing every first-time visitor a double page load.
+       Clearing before rehydrateStores() below is enough; no reload needed. */
     if (!localStorage.getItem("tpp-backend-cleared-v1")) {
-      localStorage.clear();
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith("tpp-")) localStorage.removeItem(key);
+      }
       localStorage.setItem("tpp-backend-cleared-v1", "true");
-      window.location.reload();
-      return;
     }
 
     // 1. Rehydrate stores from local storage first

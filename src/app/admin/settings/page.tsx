@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Building2,
@@ -35,45 +35,66 @@ export default function AdminSettings() {
   const showToast = useUI((s) => s.showToast);
 
   const [form, setForm] = useState(business);
+  /* fetchBusiness resolves after mount, so a plain sync on `business` would
+     overwrite whatever the admin had already started typing. Once they touch
+     a field we stop accepting server pushes into the form. */
+  const dirty = useRef(false);
 
   useEffect(() => {
     fetchBusiness();
   }, [fetchBusiness]);
 
   useEffect(() => {
-    setForm(business);
+    if (!dirty.current) setForm(business);
   }, [business]);
+
+  const edit = (patch: Partial<typeof business>) => {
+    dirty.current = true;
+    setForm((f) => ({ ...f, ...patch }));
+  };
 
   const [confirmClear, setConfirmClear] = useState(false);
 
   // Read-only roster. Roles are changed on the Customers page.
   const [admins, setAdmins] = useState<{ id: string; email: string }[]>([]);
   const [loadingAdmins, setLoadingAdmins] = useState(true);
+  const [adminsError, setAdminsError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     const load = async () => {
       try {
         setLoadingAdmins(true);
-        const { customers, currentUserId } = await api.get<{
-          customers: { userId: string | null; email: string; role: string | null }[];
+        setAdminsError(null);
+        /* The route returns the standard paginated envelope, so the rows are
+           under `data`. Ask for the admins filter explicitly rather than
+           scanning the default first page of ten customers. */
+        const { data, currentUserId } = await api.get<{
+          data: { userId: string | null; email: string; role: string | null }[];
           currentUserId: string;
-        }>("/api/admin/customers", { auth: true });
+        }>("/api/admin/customers?filter=admins&limit=50", { auth: true });
 
+        if (!active) return;
         setCurrentUserId(currentUserId ?? null);
         setAdmins(
-          customers
+          (data ?? [])
             .filter((c) => c.role === "admin" && c.userId)
             .map((c) => ({ id: c.userId as string, email: c.email }))
             .sort((a, b) => a.email.localeCompare(b.email))
         );
-      } catch (err) {
+      } catch (err: any) {
+        if (!active) return;
         console.error(err);
+        setAdminsError(err?.message || "Could not load administrators.");
       } finally {
-        setLoadingAdmins(false);
+        if (active) setLoadingAdmins(false);
       }
     };
     load();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const sampleCount = orders.filter((o) => o.sample).length;
@@ -118,7 +139,7 @@ export default function AdminSettings() {
             <input
               className={field}
               value={form.hoursText}
-              onChange={(e) => setForm({ ...form, hoursText: e.target.value })}
+              onChange={(e) => edit({ hoursText: e.target.value })}
             />
           </label>
           <label className="flex flex-col gap-1.5">
@@ -128,7 +149,7 @@ export default function AdminSettings() {
             <input
               className={field}
               value={form.prepTime}
-              onChange={(e) => setForm({ ...form, prepTime: e.target.value })}
+              onChange={(e) => edit({ prepTime: e.target.value })}
             />
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -139,7 +160,7 @@ export default function AdminSettings() {
               <input
                 className={field}
                 value={form.phoneDisplay}
-                onChange={(e) => setForm({ ...form, phoneDisplay: e.target.value })}
+                onChange={(e) => edit({ phoneDisplay: e.target.value })}
               />
             </label>
             <label className="flex flex-col gap-1.5">
@@ -150,7 +171,7 @@ export default function AdminSettings() {
                 className={field}
                 value={form.whatsappNumber}
                 onChange={(e) =>
-                  setForm({ ...form, whatsappNumber: e.target.value.replace(/[^\d]/g, "") })
+                  edit({ whatsappNumber: e.target.value.replace(/[^\d]/g, "") })
                 }
               />
             </label>
@@ -162,7 +183,7 @@ export default function AdminSettings() {
             <input
               className={field}
               value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              onChange={(e) => edit({ address: e.target.value })}
             />
           </label>
         </div>
@@ -172,6 +193,7 @@ export default function AdminSettings() {
             type="button"
             onClick={() => {
               resetBusiness();
+              dirty.current = false;
               setForm({
                 hoursText: BUSINESS.hoursText,
                 prepTime: BUSINESS.prepTime,
@@ -221,6 +243,10 @@ export default function AdminSettings() {
         <div className="flex flex-col gap-2">
           {loadingAdmins ? (
             <p className="text-[12.5px] text-ink-400 pl-1 animate-pulse">Loading administrators...</p>
+          ) : adminsError ? (
+            <p className="rounded-2xl bg-red-50 px-3 py-2.5 text-[12.5px] font-semibold text-red-700">
+              {adminsError}
+            </p>
           ) : admins.length === 0 ? (
             <p className="text-[12.5px] text-ink-400 pl-1">No administrators registered.</p>
           ) : (
