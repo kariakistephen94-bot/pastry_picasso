@@ -17,6 +17,12 @@ export function menuRowToItem(d: any): MenuItem {
     category: d.category,
     description: d.description || undefined,
     price: d.price,
+    // A sale price at or above the list price is not a discount; drop it
+    // here so no screen has to defend against it.
+    salePrice:
+      d.sale_price != null && d.sale_price > 0 && d.sale_price < d.price
+        ? d.sale_price
+        : undefined,
     image: d.image,
     position: d.position || undefined,
     zoom: d.zoom != null ? parseFloat(d.zoom) : undefined,
@@ -38,6 +44,10 @@ export function menuItemToRow(item: MenuItem) {
     category: item.category,
     description: item.description || null,
     price: item.price,
+    sale_price:
+      item.salePrice != null && item.salePrice > 0 && item.salePrice < item.price
+        ? Math.round(item.salePrice)
+        : null,
     image: item.image,
     position: item.position || null,
     zoom: item.zoom ?? null,
@@ -64,7 +74,10 @@ export type OrderStatus =
 export interface OrderLine {
   name: string;
   qty: number;
+  /** What was actually charged per unit, sale price included. */
   price: number;
+  /** Undiscounted per-unit price, only when the item was on sale. */
+  listPrice?: number;
 }
 
 export interface Order {
@@ -77,6 +90,15 @@ export interface Order {
   note?: string;
   cancelNote?: string;
   lines: OrderLine[];
+  /** Sum of the lines, before any order-level promotion. */
+  subtotal: number;
+  /** Naira taken off by the applied promotion. 0 when none was used. */
+  discount: number;
+  /** The code the customer typed, when the promotion needed one. */
+  promoCode?: string;
+  /** Human-readable name of the promotion, e.g. "Weekend Burger Deal". */
+  promoLabel?: string;
+  /** What is actually payable: subtotal − discount. */
   total: number;
   status: OrderStatus;
   createdAt: number;
@@ -87,6 +109,12 @@ export interface Order {
 
 /** Expects the row joined with `order_items(*)`. */
 export function orderRowToOrder(o: any): Order {
+  const total = Number(o.total) || 0;
+  const discount = Number(o.discount) || 0;
+  // Orders placed before discounts existed have no subtotal of their own;
+  // for those the total IS the subtotal.
+  const subtotal = Number(o.subtotal) > 0 ? Number(o.subtotal) : total + discount;
+
   return {
     id: o.id,
     customerName: o.customer_name,
@@ -96,7 +124,11 @@ export function orderRowToOrder(o: any): Order {
     address: o.address || undefined,
     note: o.note || undefined,
     cancelNote: o.cancel_note || undefined,
-    total: o.total,
+    subtotal,
+    discount,
+    promoCode: o.promo_code || undefined,
+    promoLabel: o.promo_label || undefined,
+    total,
     status: o.status,
     createdAt: Number(o.created_at),
     paymentConfirmed: o.payment_confirmed ?? false,
@@ -106,6 +138,10 @@ export function orderRowToOrder(o: any): Order {
       name: li.name,
       qty: li.qty,
       price: li.price,
+      listPrice:
+        li.list_price != null && li.list_price > li.price
+          ? li.list_price
+          : undefined,
     })),
   };
 }

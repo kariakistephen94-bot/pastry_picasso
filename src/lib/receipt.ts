@@ -127,6 +127,16 @@ export async function downloadReceipt(order: Order) {
     doc.text(String(l.qty), W - M - 45, y, { align: "right" });
     doc.text(money(l.price * l.qty), W - M, y, { align: "right" });
     y += 6.5;
+    // A line bought on sale carries what it would have cost, so the
+    // saving survives on paper long after the sale has ended.
+    if (l.listPrice && l.listPrice > l.price) {
+      doc.setFontSize(8.5);
+      doc.setTextColor(125, 110, 118);
+      doc.text(`was ${money(l.listPrice * l.qty)}`, M + 3, y - 2);
+      doc.setFontSize(10.5);
+      doc.setTextColor(36, 26, 32);
+      y += 3;
+    }
     if (y > 255) {
       doc.addPage();
       y = 20;
@@ -138,8 +148,29 @@ export async function downloadReceipt(order: Order) {
   doc.line(M, y, W - M, y);
   y += 8;
 
+  /* Subtotal and discount only appear when there is one to show, so an
+     ordinary receipt keeps its short, single-total shape. */
+  const discount = Number(order.discount) || 0;
+  if (discount > 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10.5);
+    doc.setTextColor(125, 110, 118);
+    doc.text("Subtotal", M, y);
+    doc.text(money(order.subtotal), W - M, y, { align: "right" });
+    y += 6.5;
+
+    const promo = [order.promoLabel, order.promoCode && `(${order.promoCode})`]
+      .filter(Boolean)
+      .join(" ");
+    doc.setTextColor(16, 150, 72);
+    doc.text(`Discount${promo ? ` — ${promo}` : ""}`.slice(0, 52), M, y);
+    doc.text(`- ${money(discount)}`, W - M, y, { align: "right" });
+    y += 8;
+  }
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12.5);
+  doc.setTextColor(36, 26, 32);
   doc.text("Total", M, y);
   doc.text(money(order.total), W - M, y, { align: "right" });
   y += 10;

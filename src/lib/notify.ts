@@ -28,6 +28,11 @@ export function notifyOrderByEmail(order: Order) {
     Method: order.method,
     Address: order.address || "n/a",
     Items: items,
+    Subtotal: naira(order.subtotal),
+    Discount:
+      order.discount > 0
+        ? `${naira(order.discount)} — ${order.promoLabel ?? "promotion"}${order.promoCode ? ` (${order.promoCode})` : ""}`
+        : "none",
     Total: naira(order.total),
     Note: order.note || "none",
     Payment: `Customer says they transferred ${naira(order.total)} to ${BUSINESS.bank.bankName} (${BUSINESS.bank.accountNumber}). Verify before preparing.`,

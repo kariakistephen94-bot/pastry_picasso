@@ -6,6 +6,7 @@ import { Search, SearchX, X } from "lucide-react";
 import FoodCard from "@/components/food/FoodCard";
 import SiteFooter from "@/components/blocks/SiteFooter";
 import Pagination from "@/components/Pagination";
+import PromoBanner from "@/components/PromoBanner";
 import { CATEGORIES } from "@/lib/data";
 import { useMenu } from "@/lib/store";
 import { cn } from "@/lib/cn";
@@ -119,6 +120,8 @@ export default function MenuPage() {
             </button>
           )}
         </div>
+
+        <PromoBanner className="mt-3" />
       </header>
 
       {/* ── Category filters ──────────────────────────────────── */}

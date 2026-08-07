@@ -15,6 +15,7 @@ import ContactBlock from "@/components/blocks/ContactBlock";
 import PaymentBlock from "@/components/blocks/PaymentBlock";
 import ReviewsBlock from "@/components/blocks/ReviewsBlock";
 import SiteFooter from "@/components/blocks/SiteFooter";
+import PromoBanner from "@/components/PromoBanner";
 import { BUSINESS, CATEGORIES, IMG } from "@/lib/data";
 import { useMenu } from "@/lib/store";
 import { cn } from "@/lib/cn";
@@ -110,6 +111,7 @@ export default function HomePage() {
       <div className="flex flex-col gap-10 lg:gap-14">
         <div className="flex flex-col gap-4 lg:gap-5">
           <Hero />
+          <PromoBanner />
           <TrustBadges />
         </div>
 

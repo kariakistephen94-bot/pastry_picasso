@@ -32,13 +32,20 @@ async function statusCounts() {
   return counts;
 }
 
-/** Total revenue, excluding cancelled orders (they never count as income). */
-async function totalRevenue() {
+/**
+ * Total revenue and total discount given, both excluding cancelled
+ * orders (they are never income, and their discounts were handed back).
+ */
+async function revenueTotals() {
   const { data } = await admin()
     .from("orders")
-    .select("total")
+    .select("total, discount")
     .neq("status", "cancelled");
-  return (data ?? []).reduce((n: number, o: any) => n + (o.total || 0), 0);
+  const rows = data ?? [];
+  return {
+    revenue: rows.reduce((n: number, o: any) => n + (o.total || 0), 0),
+    discount: rows.reduce((n: number, o: any) => n + (o.discount || 0), 0),
+  };
 }
 
 /** Paginated order list for the dashboard. Admin only. */
@@ -48,11 +55,12 @@ export async function GET(req: Request) {
     if (auth instanceof NextResponse) return auth;
 
     const url = new URL(req.url);
-    const [counts, revenue] = await Promise.all([statusCounts(), totalRevenue()]);
+    const [counts, totals] = await Promise.all([statusCounts(), revenueTotals()]);
+    const { revenue, discount } = totals;
 
     // AdminShell only needs the badge numbers, not a page of rows.
     if (url.searchParams.get("countsOnly") === "1") {
-      return ok({ counts, revenue });
+      return ok({ counts, revenue, discount });
     }
 
     const { page, limit, from, to } = parsePage(req);
@@ -78,7 +86,7 @@ export async function GET(req: Request) {
       (data ?? []).map(orderRowToOrder),
       count ?? 0,
       { page, limit, from, to },
-      { counts, revenue }
+      { counts, revenue, discount }
     );
   });
 }

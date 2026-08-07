@@ -31,6 +31,11 @@ export interface MenuItem {
   category: CategoryId | "extras";
   description?: string;
   price: number;
+  /**
+   * Discounted price, set by the owner from Dashboard → Menu. Only ever
+   * honoured when it is below `price`; see effectivePrice() in lib/promo.
+   */
+  salePrice?: number;
   image: string;
   position?: string;
   zoom?: number;
@@ -45,15 +50,26 @@ export interface MenuItem {
   available?: boolean; // undefined = available
 }
 
-/** Builds the cart line for an item plus its chosen extras. */
+/**
+ * Builds the cart line for an item plus its chosen extras.
+ *
+ * Extras are charged at full price on top of both the list price and any
+ * sale price, so a discounted platter with a ₦500 add-on still shows the
+ * add-on as ₦500 rather than quietly discounting it too.
+ */
 export function composeWithExtras(item: MenuItem, extraIds: string[]): MenuItem {
   const chosen = (item.extras ?? []).filter((e) => extraIds.includes(e.id));
   if (chosen.length === 0) return item;
+  const addOn = chosen.reduce((n, c) => n + c.price, 0);
   return {
     ...item,
     id: `${item.id}::${[...extraIds].sort().join("+")}`,
     name: `${item.name} (+ ${chosen.map((c) => c.name).join(", ")})`,
-    price: item.price + chosen.reduce((n, c) => n + c.price, 0),
+    price: item.price + addOn,
+    salePrice:
+      item.salePrice != null && item.salePrice > 0
+        ? item.salePrice + addOn
+        : undefined,
   };
 }
 

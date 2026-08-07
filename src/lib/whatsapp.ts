@@ -16,6 +16,11 @@ export interface CheckoutInput {
   note?: string;
   lines: OrderLineInput[];
   total: number;
+  /** Only passed when a promotion took money off. */
+  subtotal?: number;
+  discount?: number;
+  promoLabel?: string;
+  promoCode?: string;
   paymentConfirmed?: boolean;
   trackingRef?: string;
 }
@@ -38,6 +43,14 @@ export function buildOrderMessage(input: CheckoutInput): string {
     "*Order*",
     rows,
     "",
+    input.discount && input.discount > 0
+      ? `🧾 Subtotal: ${naira(input.subtotal ?? input.total + input.discount)}`
+      : null,
+    input.discount && input.discount > 0
+      ? `🎉 Discount: -${naira(input.discount)}${
+          input.promoLabel ? ` (${input.promoLabel})` : ""
+        }${input.promoCode ? ` · code ${input.promoCode}` : ""}`
+      : null,
     `💰 *Total: ${naira(input.total)}*`,
     input.paymentConfirmed
       ? `✅ *Payment:* I have made the transfer of ${naira(input.total)} to ${BUSINESS.bank.bankName} (${BUSINESS.bank.accountNumber})`
@@ -71,6 +84,10 @@ export function whatsappOrderUrlFromOrder(order: Order): string {
     note: order.note,
     lines: order.lines,
     total: order.total,
+    subtotal: order.subtotal,
+    discount: order.discount,
+    promoLabel: order.promoLabel,
+    promoCode: order.promoCode,
     paymentConfirmed: order.paymentConfirmed,
     trackingRef: orderRef(order.id),
   });

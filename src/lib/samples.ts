@@ -47,6 +47,9 @@ export function makeSamples(): Order[] {
       customerName: SAMPLE_NAMES[i % SAMPLE_NAMES.length],
       method: Math.random() > 0.5 ? "delivery" : "pickup",
       lines,
+      // Sample orders are never discounted, so subtotal = total.
+      subtotal: total,
+      discount: 0,
       total,
       paymentConfirmed: claimed,
       paymentVerified: claimed && (status !== "new" || Math.random() > 0.5),

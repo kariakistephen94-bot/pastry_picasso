@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
+  BadgePercent,
   Check,
   FileDown,
   MailCheck,
@@ -13,7 +14,7 @@ import {
 import { WhatsAppIcon } from "@/components/icons";
 import { downloadReceipt } from "@/lib/receipt";
 import { whatsappOrderUrlFromOrder } from "@/lib/whatsapp";
-import { normalizeTrackingInput, orderRef } from "@/lib/format";
+import { naira, normalizeTrackingInput, orderRef } from "@/lib/format";
 import { api } from "@/lib/api";
 import { Order } from "@/lib/store";
 
@@ -133,6 +134,21 @@ export default function OrderPlacedPage() {
             {orderRef(order.id)}
           </p>
         </div>
+
+        {order.discount > 0 && (
+          <div className="mt-3.5 flex w-full max-w-[340px] flex-col gap-1 rounded-2xl bg-emerald-50 px-4 py-3">
+            <p className="flex items-center justify-center gap-1.5 text-[12.5px] font-bold text-emerald-800">
+              <BadgePercent className="h-4 w-4" />
+              You saved {naira(order.discount)}
+            </p>
+            <p className="text-[11.5px] font-semibold text-emerald-700">
+              {order.promoLabel ?? "Discount"}
+              {order.promoCode ? ` · ${order.promoCode}` : ""} ·{" "}
+              <span className="line-through">{naira(order.subtotal)}</span>{" "}
+              {naira(order.total)}
+            </p>
+          </div>
+        )}
 
         <p className="mt-3.5 flex items-center gap-1.5 text-[12px] font-semibold text-emerald-700">
           <MailCheck className="h-4 w-4" />

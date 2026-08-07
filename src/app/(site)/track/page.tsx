@@ -327,6 +327,27 @@ export default function TrackPage() {
                 </span>
               </div>
             ))}
+
+            {activeOrder.discount > 0 && (
+              <>
+                <div className="mt-1.5 flex items-center justify-between border-t border-cream-300/60 pt-2 text-[12.5px] font-semibold text-ink-500">
+                  <span>Subtotal</span>
+                  <span className="tabular-nums">
+                    {naira(activeOrder.subtotal)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1 text-[12.5px] font-semibold text-emerald-600">
+                  <span className="line-clamp-1">
+                    {activeOrder.promoLabel ?? "Discount"}
+                    {activeOrder.promoCode ? ` (${activeOrder.promoCode})` : ""}
+                  </span>
+                  <span className="shrink-0 tabular-nums">
+                    −{naira(activeOrder.discount)}
+                  </span>
+                </div>
+              </>
+            )}
+
             <div className="mt-1.5 flex items-center justify-between border-t border-cream-300/60 pt-2">
               <span className="text-[13px] font-bold text-ink-900">Total</span>
               <span className="font-display text-[15px] font-extrabold tabular-nums text-ink-900">

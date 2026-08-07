@@ -10,6 +10,7 @@ import {
   BUSINESS,
 } from "./data";
 import { api } from "./api";
+import { effectivePrice, isOnSale } from "./promo";
 import type {
   Order,
   OrderLine,
@@ -28,7 +29,10 @@ export type { Order, OrderLine, OrderStatus, Review, BusinessSettings };
 export interface CartLine {
   id: string;
   name: string;
+  /** What the customer pays per unit, i.e. the sale price when on sale. */
   price: number;
+  /** Undiscounted per-unit price, only present while the item is on sale. */
+  listPrice?: number;
   image: string;
   position?: string;
   zoom?: number;
@@ -38,10 +42,13 @@ export interface CartLine {
 
 interface CartState {
   lines: CartLine[];
+  /** Promo code the customer typed, kept so it survives navigation. */
+  promoCode: string;
   add: (item: MenuItem, qty?: number) => void;
   inc: (id: string) => void;
   dec: (id: string) => void;
   remove: (id: string) => void;
+  setPromoCode: (code: string) => void;
   clear: () => void;
 }
 
@@ -49,6 +56,7 @@ export const useCart = create<CartState>()(
   persist(
     (set) => ({
       lines: [],
+      promoCode: "",
       add: (item, qty = 1) =>
         set((s) => {
           const existing = s.lines.find((l) => l.id === item.id);
@@ -59,13 +67,15 @@ export const useCart = create<CartState>()(
               ),
             };
           }
+          const onSale = isOnSale(item);
           return {
             lines: [
               ...s.lines,
               {
                 id: item.id,
                 name: item.name,
-                price: item.price,
+                price: effectivePrice(item),
+                listPrice: onSale ? item.price : undefined,
                 image: item.image,
                 position: item.position,
                 zoom: item.zoom,
@@ -86,7 +96,10 @@ export const useCart = create<CartState>()(
             .filter((l) => l.qty > 0),
         })),
       remove: (id) => set((s) => ({ lines: s.lines.filter((l) => l.id !== id) })),
-      clear: () => set({ lines: [] }),
+      setPromoCode: (code) => set({ promoCode: code }),
+      // A fresh cart starts with no code: the last order's discount must
+      // not silently follow the customer into the next one.
+      clear: () => set({ lines: [], promoCode: "" }),
     }),
     { name: "tpp-cart", skipHydration: true }
   )
@@ -94,8 +107,12 @@ export const useCart = create<CartState>()(
 
 export const cartCount = (lines: CartLine[]) =>
   lines.reduce((n, l) => n + l.qty, 0);
+/** Cart subtotal, i.e. before any order-level promotion. */
 export const cartTotal = (lines: CartLine[]) =>
   lines.reduce((n, l) => n + l.price * l.qty, 0);
+/** What the cart would cost with no item on sale, for the "you save" line. */
+export const cartListTotal = (lines: CartLine[]) =>
+  lines.reduce((n, l) => n + (l.listPrice ?? l.price) * l.qty, 0);
 
 /* ──────────────────────────────────────────────────────────────
    Reviews
@@ -206,6 +223,8 @@ export interface PlaceOrderInput {
   items: { id: string; name: string; qty: number }[];
   paymentConfirmed?: boolean;
   customerId?: string;
+  /** Promo code as typed; the server re-validates and re-prices it. */
+  promoCode?: string;
 }
 
 interface OrdersState {
@@ -247,6 +266,7 @@ export const useOrders = create<OrdersState>()(
           items: input.items.map((i) => ({ id: i.id, qty: i.qty })),
           paymentConfirmed: input.paymentConfirmed ?? false,
           customerId: input.customerId,
+          promoCode: input.promoCode,
         });
         set((s) => ({ orders: [order, ...s.orders] }));
         return order;

@@ -9,6 +9,7 @@ import { useUI } from "@/lib/ui-store";
 import { useCart } from "@/lib/store";
 import { useLockBody } from "@/lib/hooks";
 import { naira } from "@/lib/format";
+import { effectivePrice, isOnSale, salePercent } from "@/lib/promo";
 import { BUSINESS, composeWithExtras } from "@/lib/data";
 import { cn } from "@/lib/cn";
 
@@ -44,7 +45,11 @@ export default function ItemSheet() {
     [extras, selected]
   );
 
-  const total = item ? (item.price + extrasSum) * qty : 0;
+  const onSale = item ? isOnSale(item) : false;
+  const unit = item ? effectivePrice(item) : 0;
+  const total = item ? (unit + extrasSum) * qty : 0;
+  /* What the same order would have cost at the normal price. */
+  const listTotal = item ? (item.price + extrasSum) * qty : 0;
   const soldOut = item?.available === false;
 
   const toggleExtra = (id: string) =>
@@ -118,6 +123,11 @@ export default function ItemSheet() {
                 </div>
 
                 <div className="absolute bottom-3.5 left-4 flex flex-wrap gap-1.5">
+                  {onSale && (
+                    <span className="flex items-center gap-1 rounded-full bg-brand-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-pink">
+                      {salePercent(item)}% off today
+                    </span>
+                  )}
                   {item.chefSpecial && (
                     <span className="glass flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold text-brand-800">
                       <Sparkles className="h-3 w-3" /> Chef&apos;s Special
@@ -137,9 +147,16 @@ export default function ItemSheet() {
                   <h2 className="font-display text-[21px] font-extrabold leading-snug tracking-tight text-ink-900">
                     {item.name}
                   </h2>
-                  <p className="whitespace-nowrap font-display text-[19px] font-extrabold text-brand-600">
-                    {naira(item.price)}
-                  </p>
+                  <div className="whitespace-nowrap text-right">
+                    <p className="font-display text-[19px] font-extrabold text-brand-600">
+                      {naira(unit)}
+                    </p>
+                    {onSale && (
+                      <p className="text-[12px] font-semibold text-ink-400 line-through">
+                        {naira(item.price)}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 {item.description && (
@@ -225,7 +242,13 @@ export default function ItemSheet() {
             </div>
 
             {/* Footer */}
-            <div className="flex items-center gap-3 border-t border-cream-200 bg-cream-50/95 px-5 py-3.5 pb-safe backdrop-blur sm:px-6">
+            <div className="flex flex-col gap-2 border-t border-cream-200 bg-cream-50/95 px-5 py-3.5 pb-safe backdrop-blur sm:px-6">
+              {onSale && !soldOut && (
+                <p className="text-center text-[11.5px] font-bold text-emerald-600">
+                  You save {naira(listTotal - total)} on this order
+                </p>
+              )}
+              <div className="flex items-center gap-3">
               <QuantityStepper
                 value={qty}
                 min={1}
@@ -246,6 +269,7 @@ export default function ItemSheet() {
               >
                 {soldOut ? "Sold out today" : `Add to cart · ${naira(total)}`}
               </motion.button>
+              </div>
             </div>
           </motion.div>
         </div>

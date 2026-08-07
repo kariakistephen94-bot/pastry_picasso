@@ -66,6 +66,23 @@ export async function PATCH(
     const { error } = await db.from("orders").update(patch).eq("id", id);
     if (error) throw error;
 
+    // A cancelled order gives its promotion back: the usage slot returns
+    // to the pool and the customer is free to use the code again.
+    // Revoking the cancellation re-consumes it. Neither is worth failing
+    // the status change over, so both are logged rather than thrown.
+    if (patch.status === "cancelled" && oldOrder.status !== "cancelled") {
+      const { error: voidErr } = await db.rpc("void_order_promotion", {
+        p_order_id: id,
+      });
+      if (voidErr) console.error("Failed to void promo redemption:", voidErr);
+    } else if (reinstated) {
+      const { error: restoreErr } = await db.rpc("restore_order_promotion", {
+        p_order_id: id,
+      });
+      if (restoreErr)
+        console.error("Failed to restore promo redemption:", restoreErr);
+    }
+
     // 2) Trigger async email notifications based on status transitions
     const updatedOrder = {
       ...oldOrder,

@@ -7,6 +7,7 @@ import type { MenuItem } from "@/lib/data";
 import { useCart } from "@/lib/store";
 import { useUI } from "@/lib/ui-store";
 import { naira } from "@/lib/format";
+import { effectivePrice, isOnSale, salePercent } from "@/lib/promo";
 import { cn } from "@/lib/cn";
 
 interface FoodCardProps {
@@ -24,6 +25,8 @@ export default function FoodCard({ item, variant = "grid", index = 0 }: FoodCard
   const soldOut = item.available === false;
   const hasExtras = (item.extras?.length ?? 0) > 0;
   const rating = item.rating ?? 5;
+  const onSale = isOnSale(item);
+  const price = effectivePrice(item);
 
   const quickAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -73,9 +76,19 @@ export default function FoodCard({ item, variant = "grid", index = 0 }: FoodCard
           )}
           <div className="mt-1.5 flex items-center justify-between">
             <div>
-              <span className="text-[14px] font-extrabold text-ink-900">
-                {naira(item.price)}
+              <span
+                className={cn(
+                  "text-[14px] font-extrabold",
+                  onSale ? "text-brand-600" : "text-ink-900"
+                )}
+              >
+                {naira(price)}
               </span>
+              {onSale && (
+                <span className="ml-1.5 text-[11.5px] font-semibold text-ink-400 line-through">
+                  {naira(item.price)}
+                </span>
+              )}
               {hasExtras && (
                 <p className="text-[10.5px] font-bold text-brand-600">
                   + extras available
@@ -129,10 +142,16 @@ export default function FoodCard({ item, variant = "grid", index = 0 }: FoodCard
             {rating % 1 === 0 ? rating : rating.toFixed(1)}
           </span>
         </span>
-        {item.chefSpecial && (
-          <span className="glass absolute left-2 top-2 flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold text-brand-800">
-            <Sparkles className="h-3 w-3" /> Special
+        {onSale ? (
+          <span className="absolute left-2 top-2 rounded-full bg-brand-600 px-2 py-1 text-[10px] font-bold text-white shadow-pink">
+            -{salePercent(item)}%
           </span>
+        ) : (
+          item.chefSpecial && (
+            <span className="glass absolute left-2 top-2 flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold text-brand-800">
+              <Sparkles className="h-3 w-3" /> Special
+            </span>
+          )
         )}
         {soldOut && (
           <span className="absolute bottom-2 left-2 rounded-full bg-ink-900/80 px-2 py-1 text-[10px] font-bold text-white backdrop-blur">
@@ -156,8 +175,18 @@ export default function FoodCard({ item, variant = "grid", index = 0 }: FoodCard
 
         <div className="mt-2.5 flex items-end justify-between gap-2">
           <div className="min-w-0">
-            <p className="font-display text-[15.5px] font-extrabold tabular-nums text-ink-900 sm:text-[16.5px]">
-              {naira(item.price)}
+            <p
+              className={cn(
+                "font-display text-[15.5px] font-extrabold tabular-nums sm:text-[16.5px]",
+                onSale ? "text-brand-600" : "text-ink-900"
+              )}
+            >
+              {naira(price)}
+              {onSale && (
+                <span className="ml-1.5 font-sans text-[11.5px] font-semibold text-ink-400 line-through">
+                  {naira(item.price)}
+                </span>
+              )}
             </p>
             {hasExtras && (
               <p className="mt-0.5 truncate text-[10.5px] font-bold text-brand-600">

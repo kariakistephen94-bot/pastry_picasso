@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  BadgePercent,
   Banknote,
   Bike,
   Ban,
@@ -60,6 +61,7 @@ export default function AdminOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [revenue, setRevenue] = useState(0);
+  const [discount, setDiscount] = useState(0);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
@@ -83,6 +85,7 @@ export default function AdminOrders() {
           totalPages: number;
           counts: Record<string, number>;
           revenue: number;
+          discount: number;
         }>(
           `/api/admin/orders?page=${page}&limit=${PAGE_SIZE}&status=${filter}&sort=${sort}`,
           { auth: true }
@@ -94,6 +97,7 @@ export default function AdminOrders() {
         setTotalPages(res.totalPages ?? 1);
         setCounts(res.counts ?? {});
         setRevenue(res.revenue ?? 0);
+        setDiscount(res.discount ?? 0);
         setError(null);
       } catch (err) {
         console.error("Failed to load orders:", err);
@@ -209,7 +213,10 @@ export default function AdminOrders() {
             icon: Banknote,
             tint: "bg-brand-100 text-brand-700",
             label: "Revenue",
-            hint: "excludes cancelled",
+            hint:
+              discount > 0
+                ? `excludes cancelled · ${naira(discount)} discounted`
+                : "excludes cancelled",
             value: naira(revenue),
           },
           {
@@ -745,6 +752,26 @@ function OrderDetailsModal({
                     </span>
                   </div>
                 ))}
+                {o.discount > 0 && (
+                  <>
+                    <div className="mt-2 flex items-center justify-between border-t border-cream-300/60 pt-2.5 text-[12.5px] font-semibold text-ink-500">
+                      <span>Subtotal</span>
+                      <span className="tabular-nums">{naira(o.subtotal)}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-3 py-1.5 text-[12.5px] font-semibold text-emerald-600">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <BadgePercent className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">
+                          {o.promoLabel ?? "Discount"}
+                          {o.promoCode ? ` (${o.promoCode})` : ""}
+                        </span>
+                      </span>
+                      <span className="shrink-0 tabular-nums">
+                        −{naira(o.discount)}
+                      </span>
+                    </div>
+                  </>
+                )}
                 <div className="mt-2 flex items-center justify-between border-t border-cream-300/60 pt-2.5">
                   <span className="text-[13.5px] font-bold text-ink-900">
                     Total

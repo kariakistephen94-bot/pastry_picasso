@@ -179,7 +179,17 @@ function emailWrapper(title: string, bodyContent: string) {
   `;
 }
 
-function itemsTable(lines: Order["lines"], total: number) {
+/**
+ * The order table. Pass the whole order so a discounted one grows a
+ * subtotal and a discount row; an undiscounted one keeps the plain
+ * single-total layout it has always had.
+ */
+function itemsTable(order: Order) {
+  const discount = Number(order.discount) || 0;
+  const promo = [order.promoLabel, order.promoCode && `(${order.promoCode})`]
+    .filter(Boolean)
+    .join(" ");
+
   return `
     <div class="table-container">
       <table>
@@ -191,20 +201,37 @@ function itemsTable(lines: Order["lines"], total: number) {
           </tr>
         </thead>
         <tbody>
-          ${lines
+          ${order.lines
             .map(
               (l) => `
             <tr>
-              <td>${l.name}</td>
+              <td>${l.name}${
+                l.listPrice && l.listPrice > l.price
+                  ? ` <span style="color: #8c8c9a; text-decoration: line-through; font-size: 11.5px;">${naira(l.listPrice * l.qty)}</span>`
+                  : ""
+              }</td>
               <td style="text-align: center; font-weight: 700;">${l.qty}</td>
               <td style="text-align: right; font-weight: 700; white-space: nowrap;">${naira(l.price * l.qty)}</td>
             </tr>
           `
             )
             .join("")}
+          ${
+            discount > 0
+              ? `
+          <tr>
+            <td colspan="2" style="color: #8c8c9a;">Subtotal</td>
+            <td style="text-align: right; white-space: nowrap; color: #8c8c9a;">${naira(order.subtotal)}</td>
+          </tr>
+          <tr>
+            <td colspan="2" style="color: #1f6b3a; font-weight: 700;">Discount${promo ? ` — ${promo}` : ""}</td>
+            <td style="text-align: right; white-space: nowrap; color: #1f6b3a; font-weight: 700;">−${naira(discount)}</td>
+          </tr>`
+              : ""
+          }
           <tr class="total-row">
             <td colspan="2">Total</td>
-            <td style="text-align: right; white-space: nowrap;">${naira(total)}</td>
+            <td style="text-align: right; white-space: nowrap;">${naira(order.total)}</td>
           </tr>
         </tbody>
       </table>
@@ -230,7 +257,7 @@ export async function sendOrderPlacedEmail(order: Order) {
       <p>We are currently verifying your bank transfer. Once confirmed, our kitchen will start baking your treats fresh!</p>
       
       <h3 style="margin-top: 24px; font-size: 14px; font-weight: 700; color: #1e1e24;">Order Summary (${trackingRef})</h3>
-      ${itemsTable(order.lines, order.total)}
+      ${itemsTable(order)}
       
       <div style="background-color: #f7f9fa; border-radius: 12px; padding: 14px; margin-top: 16px; font-size: 12.5px;">
         <p style="margin: 0 0 6px;"><strong>Delivery Method:</strong> <span style="text-transform: capitalize;">${order.method}</span></p>
@@ -259,7 +286,7 @@ export async function sendOrderPlacedEmail(order: Order) {
     <p>A new order has been placed by <strong>${order.customerName}</strong> (${order.phone || "no phone"}).</p>
     
     <h3>Items Ordered</h3>
-    ${itemsTable(order.lines, order.total)}
+    ${itemsTable(order)}
     
     <div style="background-color: #f7f9fa; border-radius: 12px; padding: 14px; margin-top: 16px; font-size: 12.5px;">
       <p style="margin: 0 0 6px;"><strong>Customer:</strong> ${order.customerName}</p>
@@ -366,7 +393,7 @@ export async function sendOrderReinstatedEmail(order: Order) {
     </div>
 
     <h3 style="margin-top: 24px; font-size: 14px; font-weight: 700; color: #1e1e24;">Order Summary (${trackingRef})</h3>
-    ${itemsTable(order.lines, order.total)}
+    ${itemsTable(order)}
 
     <p>If you no longer want this order, or anything looks wrong, please reach us on WhatsApp and we will sort it out straight away.</p>
 

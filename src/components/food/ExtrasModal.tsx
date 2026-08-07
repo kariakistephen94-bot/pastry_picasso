@@ -8,6 +8,7 @@ import { useCart } from "@/lib/store";
 import { useUI } from "@/lib/ui-store";
 import { useLockBody } from "@/lib/hooks";
 import { naira } from "@/lib/format";
+import { effectivePrice, isOnSale } from "@/lib/promo";
 import { cn } from "@/lib/cn";
 
 /**
@@ -34,12 +35,14 @@ export default function ExtrasModal() {
     return () => window.removeEventListener("keydown", onKey);
   }, [closeExtras]);
 
+  const onSale = item ? isOnSale(item) : false;
+
   const total = useMemo(() => {
     if (!item) return 0;
     const extraSum = (item.extras ?? [])
       .filter((e) => selected.includes(e.id))
       .reduce((n, e) => n + e.price, 0);
-    return item.price + extraSum;
+    return effectivePrice(item) + extraSum;
   }, [item, selected]);
 
   const toggle = (id: string) =>
@@ -84,7 +87,18 @@ export default function ExtrasModal() {
               </h2>
               <p className="mt-1 text-[12.5px] font-medium text-ink-500">
                 Add any extras you&apos;d like. Base price{" "}
-                <span className="font-bold text-ink-700">{naira(item.price)}</span>.
+                <span className="font-bold text-ink-700">
+                  {naira(effectivePrice(item))}
+                </span>
+                {onSale && (
+                  <>
+                    {" "}
+                    <span className="text-ink-400 line-through">
+                      {naira(item.price)}
+                    </span>
+                  </>
+                )}
+                .
               </p>
               <button
                 type="button"

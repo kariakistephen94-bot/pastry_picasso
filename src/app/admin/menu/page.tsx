@@ -20,6 +20,7 @@ import { useUI } from "@/lib/ui-store";
 import { useLockBody } from "@/lib/hooks";
 import { fileToDataUrl, readFileAsDataUrl, slugify } from "@/lib/image";
 import { naira } from "@/lib/format";
+import { isOnSale, salePercent } from "@/lib/promo";
 import { cn } from "@/lib/cn";
 import { supabase } from "@/lib/supabase";
 
@@ -292,6 +293,7 @@ function MenuRow({
 }) {
   const [confirm, setConfirm] = useState(false);
   const available = item.available !== false;
+  const onSale = isOnSale(item);
   const catLabel =
     ALL_CATS.find((c) => c.id === item.category)?.label ?? item.category;
 
@@ -321,9 +323,24 @@ function MenuRow({
           )}
         >
           {item.name}
+          {onSale && (
+            <span className="ml-1.5 rounded-full bg-brand-100 px-1.5 py-0.5 align-middle text-[10px] font-bold text-brand-700">
+              -{salePercent(item)}%
+            </span>
+          )}
         </p>
         <p className="text-[11.5px] font-semibold text-ink-400">
-          {catLabel} · {naira(item.price)}
+          {catLabel} ·{" "}
+          {onSale ? (
+            <>
+              <span className="line-through">{naira(item.price)}</span>{" "}
+              <span className="font-bold text-brand-600">
+                {naira(item.salePrice!)}
+              </span>
+            </>
+          ) : (
+            naira(item.price)
+          )}
           {item.popular && " · ⭐ popular"}
         </p>
       </div>
@@ -396,6 +413,9 @@ function MenuEditor({
   const objectUrlRef = useRef<string | null>(null);
   const [name, setName] = useState(item?.name ?? "");
   const [price, setPrice] = useState(item ? String(item.price) : "");
+  const [salePrice, setSalePrice] = useState(
+    item?.salePrice ? String(item.salePrice) : ""
+  );
   const [category, setCategory] = useState<string>(item?.category ?? "small-chops");
   const [description, setDescription] = useState(item?.description ?? "");
   const [serves, setServes] = useState(item?.serves ?? "");
@@ -486,8 +506,13 @@ function MenuEditor({
 
   const save = () => {
     const p = Math.round(Number(price));
+    const sale = salePrice ? Math.round(Number(salePrice)) : 0;
     if (!name.trim()) return setError("Give the item a name.");
     if (!Number.isFinite(p) || p <= 0) return setError("Enter a valid price in naira.");
+    if (salePrice && (!Number.isFinite(sale) || sale <= 0))
+      return setError("Enter a valid sale price, or clear the field.");
+    if (sale > 0 && sale >= p)
+      return setError("The sale price has to be lower than the normal price.");
     if (uploading)
       return setError("Hold on, your photo is still processing.");
     if (!image) return setError("Add a photo. Beautiful food sells itself.");
@@ -506,6 +531,7 @@ function MenuEditor({
       id: item?.id ?? slugify(name),
       name: name.trim(),
       price: p,
+      salePrice: sale > 0 ? sale : undefined,
       category: category as MenuItem["category"],
       description: description.trim() || undefined,
       serves: serves.trim() || undefined,
@@ -638,6 +664,97 @@ function MenuEditor({
               ))}
             </select>
           </div>
+          {/* Sale price — the simplest discount there is. Leave it empty
+              and the item sells at its normal price. */}
+          <div className="rounded-2xl bg-cream-100 p-3.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[12.5px] font-bold text-ink-900">
+                  Sale price
+                </p>
+                <p className="text-[11px] font-medium leading-snug text-ink-400">
+                  Shows the old price crossed out. Clear it to end the sale.
+                </p>
+              </div>
+              <div className="relative w-32 shrink-0">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] font-semibold text-ink-400">
+                  ₦
+                </span>
+                <input
+                  className="h-11 w-full rounded-xl bg-white pl-6 pr-2 text-[13px] font-medium text-ink-900 placeholder:text-ink-300 outline-none ring-1 ring-transparent transition focus:ring-2 focus:ring-brand-300"
+                  placeholder="None"
+                  inputMode="numeric"
+                  aria-label="Sale price in naira"
+                  value={salePrice}
+                  onChange={(e) =>
+                    setSalePrice(e.target.value.replace(/[^\d]/g, ""))
+                  }
+                />
+              </div>
+            </div>
+
+            {(() => {
+              const p = Number(price);
+              const s = Number(salePrice);
+              if (!salePrice || !Number.isFinite(s) || s <= 0) return null;
+              if (!Number.isFinite(p) || p <= 0) return null;
+              if (s >= p) {
+                return (
+                  <p className="mt-2.5 rounded-xl bg-amber-50 px-3 py-2 text-[11.5px] font-semibold text-amber-800">
+                    A sale price has to be below {naira(p)} to count as a
+                    discount.
+                  </p>
+                );
+              }
+              return (
+                <div className="mt-2.5 flex flex-wrap items-center gap-2 rounded-xl bg-white px-3 py-2">
+                  <span className="text-[12px] font-semibold text-ink-400 line-through">
+                    {naira(p)}
+                  </span>
+                  <span className="font-display text-[15px] font-extrabold text-brand-600">
+                    {naira(s)}
+                  </span>
+                  <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10.5px] font-bold text-brand-700">
+                    -{Math.max(1, Math.round((1 - s / p) * 100))}%
+                  </span>
+                  <span className="ml-auto text-[11px] font-bold text-emerald-600">
+                    Saves {naira(p - s)}
+                  </span>
+                </div>
+              );
+            })()}
+
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {[10, 15, 20, 25].map((pct) => (
+                <button
+                  key={pct}
+                  type="button"
+                  onClick={() => {
+                    const p = Number(price);
+                    if (!Number.isFinite(p) || p <= 0) {
+                      setError("Enter the normal price first.");
+                      return;
+                    }
+                    setError(null);
+                    setSalePrice(String(Math.round((p * (100 - pct)) / 100)));
+                  }}
+                  className="rounded-xl bg-white px-3 py-1.5 text-[11.5px] font-bold text-ink-600 shadow-soft transition-colors hover:text-brand-600"
+                >
+                  -{pct}%
+                </button>
+              ))}
+              {salePrice && (
+                <button
+                  type="button"
+                  onClick={() => setSalePrice("")}
+                  className="rounded-xl bg-white px-3 py-1.5 text-[11.5px] font-bold text-red-500 shadow-soft transition-colors hover:bg-red-50"
+                >
+                  End sale
+                </button>
+              )}
+            </div>
+          </div>
+
           <textarea
             className={cn(field, "min-h-[76px] resize-none")}
             placeholder="Description"

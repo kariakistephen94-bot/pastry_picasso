@@ -1,5 +1,6 @@
 import { admin, ok, fail, guard, currentUser } from "@/lib/api-server";
 import { orderRowToOrder } from "@/lib/mappers";
+import { quoteCart } from "@/lib/promo-server";
 import { sendOrderPlacedEmail } from "@/lib/resend";
 
 export const dynamic = "force-dynamic";
@@ -7,18 +8,13 @@ export const dynamic = "force-dynamic";
 const uid = () =>
   `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
-interface IncomingItem {
-  id: string;
-  qty: number;
-}
-
 /**
  * Place an order.
  *
- * Prices and the order total are computed HERE from the live menu, never
- * trusted from the client. A cart line id encodes its base item and any
- * chosen extras as `base-id::extra1+extra2`, which is enough to rebuild
- * the exact line the customer saw.
+ * Prices, discounts and the order total are computed HERE from the live
+ * menu and the live promotions table, never trusted from the client.
+ * The browser only ever sends item ids, quantities and the promo code
+ * the customer typed.
  */
 export async function POST(req: Request) {
   return guard(async () => {
@@ -33,8 +29,10 @@ export async function POST(req: Request) {
     const note = body.note ? String(body.note).trim() : null;
     const customerId = body.customerId ? String(body.customerId) : null;
     const paymentConfirmed = body.paymentConfirmed === true;
+    const promoCode =
+      typeof body.promoCode === "string" ? body.promoCode.slice(0, 64) : null;
 
-    const items: IncomingItem[] = Array.isArray(body.items) ? body.items : [];
+    const items = Array.isArray(body.items) ? body.items : [];
 
     if (!customerName) return fail("A customer name is required.");
     if (!email) return fail("An email address is required.");
@@ -46,52 +44,68 @@ export async function POST(req: Request) {
 
     const db = admin();
 
-    // Resolve every base item referenced by the cart in one query.
-    const baseIds = Array.from(
-      new Set(items.map((i) => String(i.id).split("::")[0]))
-    );
-    const { data: menuRows, error: menuErr } = await db
-      .from("menu_items")
-      .select("id, name, price, extras, available")
-      .in("id", baseIds);
-    if (menuErr) throw menuErr;
+    // Re-price everything against the live menu and promotions. The
+    // customer's own email drives the first-order and per-customer
+    // checks, so a code can't be recycled by re-typing it at checkout.
+    const priced = await quoteCart({ items, code: promoCode, email });
+    if (!priced.ok) return fail(priced.error);
 
-    const menu = new Map((menuRows ?? []).map((m: any) => [m.id, m]));
+    const { quote, lines, promotion } = priced.result;
 
-    const lines: { order_id: string; name: string; qty: number; price: number }[] =
-      [];
-    let total = 0;
+    // A code that was valid in the cart preview but has since expired,
+    // run out or stopped qualifying must not silently vanish: the
+    // customer is about to transfer a specific amount, so send them
+    // back to the cart rather than quietly charging them more.
+    if (promoCode && quote.codeError) return fail(quote.codeError);
 
-    for (const item of items) {
-      const qty = Math.max(1, Math.floor(Number(item.qty) || 0));
-      const [baseId, extrasPart] = String(item.id).split("::");
-      const base = menu.get(baseId);
+    // Attribute to the signed-in account when there is one; guests stay
+    // null. Resolved before the promotion is claimed so a failure here
+    // can't strand a usage slot.
+    const user = await currentUser(req);
 
-      if (!base) return fail(`An item in your cart is no longer available.`);
-      if (base.available === false)
-        return fail(`"${base.name}" is currently unavailable.`);
-
-      const extraIds = extrasPart ? extrasPart.split("+") : [];
-      const available = Array.isArray(base.extras) ? base.extras : [];
-      const chosen = available.filter((e: any) => extraIds.includes(e.id));
-
-      let unit = base.price;
-      let name = base.name;
-      if (chosen.length > 0) {
-        unit += chosen.reduce((n: number, c: any) => n + (c.price || 0), 0);
-        name = `${base.name} (+ ${chosen.map((c: any) => c.name).join(", ")})`;
+    // Claim the usage slot BEFORE writing the order. This is a single
+    // conditional UPDATE in Postgres, so two people racing for the last
+    // use of a limited code can never both win.
+    let claimedPromotionId: string | null = null;
+    if (promotion && quote.discount > 0) {
+      if (promotion.usageLimit != null) {
+        const { data: claimed, error: claimErr } = await db.rpc(
+          "claim_promotion",
+          { p_id: promotion.id }
+        );
+        if (claimErr) throw claimErr;
+        if (claimed !== true) {
+          return fail(
+            promotion.code
+              ? "That promo code has just been fully claimed. Please remove it and try again."
+              : "That offer has just ended. Please refresh your cart."
+          );
+        }
+      } else {
+        // Unlimited promo: still count it, but nothing can fail here.
+        await db.rpc("claim_promotion", { p_id: promotion.id });
       }
-
-      total += unit * qty;
-      lines.push({ order_id: "", name, qty, price: unit });
+      claimedPromotionId = promotion.id;
     }
 
-    // Attribute to the signed-in account when there is one; guests stay null.
-    const user = await currentUser(req);
+    /** Hands the usage slot back when anything below fails. */
+    const releaseClaim = async () => {
+      if (!claimedPromotionId) return;
+      const { error: releaseErr } = await db.rpc("release_promotion", {
+        p_id: claimedPromotionId,
+      });
+      if (releaseErr) console.error("Failed to release promotion:", releaseErr);
+    };
 
     const id = uid();
     const createdAt = Date.now();
-    lines.forEach((l) => (l.order_id = id));
+    const orderItems = lines.map((l) => ({
+      order_id: id,
+      name: l.name,
+      qty: l.qty,
+      price: l.unitPrice,
+      list_price: l.listPrice ?? null,
+    }));
 
     const { error: orderErr } = await db.from("orders").insert({
       id,
@@ -101,7 +115,12 @@ export async function POST(req: Request) {
       method,
       address: method === "delivery" ? address : null,
       note,
-      total,
+      subtotal: quote.subtotal,
+      discount: quote.discount,
+      promo_code: quote.applied?.code ?? null,
+      promo_label: quote.applied?.name ?? null,
+      promotion_id: claimedPromotionId,
+      total: quote.total,
       status: "new",
       payment_confirmed: paymentConfirmed,
       payment_verified: false,
@@ -109,14 +128,34 @@ export async function POST(req: Request) {
       customer_id: customerId,
       user_id: user?.id ?? null,
     });
-    if (orderErr) throw orderErr;
+    if (orderErr) {
+      await releaseClaim();
+      throw orderErr;
+    }
 
-    const { error: itemsErr } = await db.from("order_items").insert(lines);
+    const { error: itemsErr } = await db.from("order_items").insert(orderItems);
     if (itemsErr) {
       // Roll back the orphaned order so a failed line insert can't leave a
       // header with no items.
       await db.from("orders").delete().eq("id", id);
+      await releaseClaim();
       throw itemsErr;
+    }
+
+    // The redemption row is the audit trail: which order used which
+    // offer, for how much. Cancelling the order voids it and gives the
+    // usage back. A failure here is not worth losing the order over.
+    if (claimedPromotionId) {
+      const { error: redeemErr } = await db.from("promo_redemptions").insert({
+        promotion_id: claimedPromotionId,
+        order_id: id,
+        code: quote.applied?.code ?? null,
+        email: email.toLowerCase(),
+        customer_id: customerId,
+        amount: quote.discount,
+        created_at: createdAt,
+      });
+      if (redeemErr) console.error("Failed to record redemption:", redeemErr);
     }
 
     const order = orderRowToOrder({
@@ -127,12 +166,16 @@ export async function POST(req: Request) {
       method,
       address,
       note,
-      total,
+      subtotal: quote.subtotal,
+      discount: quote.discount,
+      promo_code: quote.applied?.code ?? null,
+      promo_label: quote.applied?.name ?? null,
+      total: quote.total,
       status: "new",
       payment_confirmed: paymentConfirmed,
       payment_verified: false,
       created_at: createdAt,
-      order_items: lines,
+      order_items: orderItems,
     });
 
     sendOrderPlacedEmail(order).catch((err) => {
