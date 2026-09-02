@@ -101,8 +101,7 @@ export const BUSINESS = {
     accountName: "The Pastry Picasso Enterprises",
     accountNumber: "5297795254",
   },
-  mapsUrl:
-    "https://www.google.com/maps/search/?api=1&query=4+Olugbede+Street+Egbeda+Alimosho+Lagos+Nigeria",
+  mapsUrl: "https://maps.app.goo.gl/UFxiEobikAN7R5Vj9",
 } as const;
 
 export const IMG = {
