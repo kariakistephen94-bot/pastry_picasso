@@ -63,51 +63,57 @@ export default function ContactBlock() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_1.05fr]">
-      {/* Map placeholder */}
-      <motion.a
-        href={BUSINESS.mapsUrl}
-        target="_blank"
-        rel="noopener noreferrer"
+      {/* Live map */}
+      <motion.div
         initial={{ opacity: 0, y: 16 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.55 }}
-        className="group relative flex min-h-[260px] flex-col justify-between overflow-hidden rounded-[26px] bg-gradient-to-br from-brand-100 via-cream-100 to-brand-50 p-6 shadow-soft lg:min-h-[320px]"
+        className="group relative min-h-[340px] overflow-hidden rounded-[26px] bg-cream-100 shadow-soft lg:min-h-[360px]"
       >
-        {/* dotted "map" texture */}
-        <div
-          aria-hidden
-          className="absolute inset-0 opacity-[0.35]"
-          style={{
-            backgroundImage:
-              "radial-gradient(rgb(184 15 102 / 0.25) 1.2px, transparent 1.2px)",
-            backgroundSize: "22px 22px",
-          }}
+        {/* Pointer events are off so the card scrolls normally on mobile and a
+            tap anywhere opens the full map. Google's attribution strip stays
+            visible along the bottom edge. */}
+        <iframe
+          title={`Map showing ${BUSINESS.name}, ${BUSINESS.address}`}
+          src={BUSINESS.mapEmbedUrl}
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          className="pointer-events-none absolute inset-0 h-full w-full border-0"
         />
-        <div aria-hidden className="absolute -right-10 -top-10 h-44 w-44 rounded-full bg-brand-200/50 blur-2xl" />
 
-        <div className="relative">
-          <span className="glass inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-brand-800">
-            <Navigation className="h-3 w-3" /> Find us
-          </span>
-        </div>
+        <a
+          href={BUSINESS.mapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute inset-0 flex items-start p-4 sm:p-5"
+        >
+          <span className="glass-strong max-w-[92%] rounded-[22px] p-4 shadow-card sm:max-w-[80%]">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-brand-700">
+              <Navigation className="h-3 w-3" /> Find us
+            </span>
 
-        <div className="relative">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-pink animate-float-slow">
-            <MapPin className="h-6 w-6" />
+            <span className="mt-2.5 flex items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-pink">
+                <MapPin className="h-5 w-5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-display text-[18px] font-extrabold leading-tight tracking-tight text-ink-900">
+                  {BUSINESS.addressLines[0]}
+                </span>
+                <span className="block text-[13px] font-medium text-ink-500">
+                  {BUSINESS.addressLines[1]} · {BUSINESS.addressLines[2]}
+                </span>
+              </span>
+            </span>
+
+            <span className="mt-3 inline-flex items-center gap-1.5 rounded-2xl bg-ink-900 px-4 py-2.5 text-[12.5px] font-bold text-white transition-transform group-hover:scale-[1.03]">
+              Open in Google Maps
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </span>
           </span>
-          <h3 className="mt-3 font-display text-[19px] font-extrabold tracking-tight text-ink-900">
-            {BUSINESS.addressLines[0]}
-          </h3>
-          <p className="text-[13.5px] font-medium text-ink-500">
-            {BUSINESS.addressLines[1]} · {BUSINESS.addressLines[2]}
-          </p>
-          <span className="mt-4 inline-flex items-center gap-1.5 rounded-2xl bg-ink-900 px-4 py-2.5 text-[12.5px] font-bold text-white transition-transform group-hover:scale-[1.03]">
-            Open in Google Maps
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </span>
-        </div>
-      </motion.a>
+        </a>
+      </motion.div>
 
       {/* Contact cards */}
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">

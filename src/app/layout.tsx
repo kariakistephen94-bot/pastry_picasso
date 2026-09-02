@@ -90,6 +90,12 @@ const restaurantJsonLd = {
     addressRegion: "Lagos",
     addressCountry: "NG",
   },
+  geo: {
+    "@type": "GeoCoordinates",
+    latitude: BUSINESS.geo.lat,
+    longitude: BUSINESS.geo.lng,
+  },
+  hasMap: BUSINESS.mapsUrl,
   openingHoursSpecification: [
     {
       "@type": "OpeningHoursSpecification",
