@@ -101,20 +101,20 @@ export const BUSINESS = {
     accountName: "The Pastry Picasso Enterprises",
     accountNumber: "5297795254",
   },
-  // Pinned to the Google Business Profile listing itself (feature id +
-  // coordinates), not to the address text. Searching "4 Olugbede Street"
-  // geocodes to a different Olugbede St in Somolu, so never build the map
-  // link from BUSINESS.address.
-  geo: { lat: 6.5910742, lng: 3.2924351 },
-  mapsUrl:
-    "https://www.google.com/maps/place/The+Pastry+Picasso+Cafe/@6.5910742,3.2924351,18z/data=!4m6!3m5!1s0x103b91dbc934453d:0x6bf39430669574de!8m2!3d6.5910742!4d3.2924351!16s%2Fg%2F11nvp6j6rr",
+  // Pinned to the shop's real GPS coordinates, read from a live location at
+  // the door. The Google Business Profile listing sits ~90m north-east of the
+  // actual entrance, and searching "4 Olugbede Street" geocodes to a different
+  // Olugbede St in Somolu, so always link by these coordinates, never by the
+  // listing or the address text.
+  geo: { lat: 6.590462, lng: 3.291954 },
+  mapsUrl: "https://www.google.com/maps?q=6.590462,3.291954",
   directionsUrl:
-    "https://www.google.com/maps/dir/?api=1&destination=6.5910742%2C3.2924351",
+    "https://www.google.com/maps/dir/?api=1&destination=6.590462%2C3.291954",
   // Keyless Google Maps embed (redirects to /maps/embed, which is frameable).
   // Query by coordinates, never by address: the address text geocodes to the
   // wrong Olugbede Street.
   mapEmbedUrl:
-    "https://www.google.com/maps?q=6.5910742,3.2924351&z=17&hl=en&output=embed",
+    "https://www.google.com/maps?q=6.590462,3.291954&z=17&hl=en&output=embed",
 } as const;
 
 export const IMG = {
